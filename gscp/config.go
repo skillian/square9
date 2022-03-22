@@ -35,29 +35,40 @@ func LoadConfigFile(filename, key string) (c *Config, err error) {
 // LoadConfig loads a mapping of keys to configurations as JSON from an
 // io.Reader and selects the configuration associated with the given key.
 func LoadConfig(r io.Reader, key string) (*Config, error) {
-	bs, err := ioutil.ReadAll(r)
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, errors.ErrorfWithCause(
 			err, "failed to read %v", r)
 	}
-	var m map[string]*Config
-	if err = json.Unmarshal(bs, &m); err != nil {
+	if key != "" {
+		return loadMultiConfig(data, key)
+	}
+	return loadSingleConfig(data)
+}
+
+func loadMultiConfig(data []byte, key string) (cfg *Config, err error) {
+	var m map[string]json.RawMessage
+	if err = json.Unmarshal(data, &m); err != nil {
 		return nil, errors.ErrorfWithCause(
-			err, "failed to unmarshal configuration")
+			err, "failed to unmarshal configuration",
+		)
 	}
-	if len(m) == 0 {
-		return nil, errors.Errorf("no configurations in %v", r)
+	cfgVal, ok := m[key]
+	if !ok {
+		return nil, errors.Errorf(
+			"no configuration with key: %q", key,
+		)
 	}
-	if key == "" {
-		for key = range m {
-			break
-		}
-		if len(m) > 1 {
-			logger.Warn1("no specific configuration specified.  "+
-				"Defaulting to %q", key)
-		}
+	return loadSingleConfig(([]byte)(cfgVal))
+}
+
+func loadSingleConfig(data []byte) (cfg *Config, err error) {
+	if err = json.Unmarshal(data, &cfg); err != nil {
+		return nil, errors.ErrorfWithCause(
+			err, "failed to unmarshal configuration",
+		)
 	}
-	return m[key], nil
+	return
 }
 
 // URL wraps a *url.URL just so we can unmarshal JSON into it.
