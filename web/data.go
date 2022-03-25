@@ -26,7 +26,7 @@ func (dbs *dbs) db(id ID) (*db, error) {
 	return &dbs.elems[i], nil
 }
 
-func (dbs *dbs) arch(dbid, arid ID) (*arch, error) {
+func (dbs *dbs) arch(dbid, arid ID) (ar *arch, err error) {
 	db, err := dbs.db(dbid)
 	if err != nil {
 		return nil, err
@@ -75,8 +75,9 @@ func makeArchs(as []Archive) archs {
 // arch is a per-sesion cache of a Square 9 archive
 type arch struct {
 	Archive
-	searches
-	fields
+	childArchs archs
+	searches   searches
+	fields     fields
 }
 
 type searches struct {

@@ -19,6 +19,8 @@ github.com/skillian/logging v0.0.0-20210425124543-4b3b9b919a80 h1:3uGhsPu9GbpgeE
 github.com/skillian/logging v0.0.0-20210425124543-4b3b9b919a80/go.mod h1:C8UGwY882WXYbAfKRThj9ciKYl09YR5hNRJgmG2XhJc=
 github.com/skillian/textwrap v0.0.0-20190707153458-15c7ee8d44ed h1:xhCPmqeLR4IjYWdWs+VIzr31yafTBIXNI4Lc7L80K4Q=
 github.com/skillian/textwrap v0.0.0-20190707153458-15c7ee8d44ed/go.mod h1:t2cRD2QQ88ZnCRMNPMwH80Y3GgNOMhrcfjIXnfzolAM=
+github.com/skillian/workers v0.0.0-20220324165209-b3b5e8db799e h1:B7gPGuw2Z7VNoLIiUcBJfVItPaCrjLp+t+zo+t8JzXs=
+github.com/skillian/workers v0.0.0-20220324165209-b3b5e8db799e/go.mod h1:d9+UkWsF/lmQssYE8nlErp3wMTScmCYGFA+XRTwDVEE=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

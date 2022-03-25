@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/bits"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/skillian/errors"
+	"github.com/skillian/workers"
 )
 
 // Client interacts with the Square 9 REST API.
@@ -26,7 +29,7 @@ type Client interface {
 	// does not guarantee (or even try) to give you the same session, so
 	// you should do all of your work that you want to do with the session
 	// while you have it and only return the final result.
-	Session(f func(*Session) error) error
+	Session(context.Context, func(context.Context, *Session) error) error
 }
 
 // Session is an implementation of the Client interface for a single user.
@@ -159,18 +162,9 @@ func (s *Session) Archives(ctx context.Context, d *Database, f IDAndNamerFilter)
 		return nil, err
 	}
 	if db.archs.elems == nil {
-		var model Archives
-		err = Request(
-			ctx, s, Path(d, "archives"), ResponseBody(JSONBody{&model}))
-		if err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to get archives from database %v", d)
+		if err = s.initArchs(ctx, db); err != nil {
+			return nil, err
 		}
-		db.archs.elems = make([]arch, len(model.Archives))
-		for i, a := range model.Archives {
-			db.archs.elems[i] = arch{Archive: a}
-		}
-		db.archs.lookup = lookupOf(db.archs.elems)
 	}
 	for _, i := range db.archs.lookup.lookup(f, nil) {
 		ars = append(ars, db.archs.elems[i].Archive)
@@ -273,22 +267,39 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 
 // Search executes a search
 func (s *Session) Search(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, options ...RequestOption) (rs Results, err error) {
+	err = s.executeSearch(ctx, d, a, sr, fs, JSONBody{&rs}, options...)
+	return
+}
+
+func (s *Session) SearchResultsIterator(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, options ...RequestOption) *ResultsIterator {
+	ctx, cancel := context.WithCancel(ctx)
+	it := &ResultsIterator{
+		cancel: cancel,
+		done:   make(chan error),
+	}
+	go func() {
+		it.done <- s.executeSearch(ctx, d, a, sr, fs, it)
+	}()
+	return it
+}
+
+func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, r io.ReaderFrom, options ...RequestOption) error {
 	srs, err := s.Searches(ctx, d, a, sr.ID())
 	if err != nil {
-		return
+		return err
 	}
 	if err = expectOne(len(srs), sr); err != nil {
-		return
+		return err
 	}
 	sr = &srs[0]
 	src, err := s.dbs.search(d.ID(), a.ID(), sr.ID())
 	if err != nil {
-		return
+		return err
 	}
 	reqOpts := []RequestOption{
 		Path(d, sr, "archive", a.ArchiveID, "documents"),
 		SecureID(sr.Hash),
-		ResponseBody(JSONBody{&rs}),
+		ResponseBody(r),
 		nil,
 	}[:3]
 	if len(fs) > 0 {
@@ -301,15 +312,14 @@ func (s *Session) Search(ctx context.Context, d *Database, a *Archive, sr *Searc
 		}
 		bs, err := json.Marshal(crit)
 		if err != nil {
-			return Results{}, errors.ErrorfWithCause(
+			return errors.ErrorfWithCause(
 				err, "failed to marshal search criteria into "+
 					"JSON")
 		}
 		reqOpts = append(reqOpts, Value("SearchCriteria", string(bs)))
 	}
 	reqOpts = append(reqOpts, options...)
-	err = Request(ctx, s, reqOpts...)
-	return
+	return Request(ctx, s, reqOpts...)
 }
 
 // Close the session, releasing the license.
@@ -318,6 +328,72 @@ func (s *Session) Close() error {
 }
 
 // Session implements the client interface by just passing in itself.
-func (s *Session) Session(f func(*Session) error) error {
-	return f(s)
+func (s *Session) Session(ctx context.Context, f func(context.Context, *Session) error) error {
+	return f(ctx, s)
+}
+
+func (s *Session) initArchs(ctx context.Context, db *db) error {
+	var model Archives
+	err := Request(
+		ctx, s, Path(db.Database, "archives"),
+		ResponseBody(JSONBody{&model}),
+	)
+	if err != nil {
+		return errors.ErrorfWithCause(
+			err, "failed to get archives from database %v",
+			db.Database.DatabaseName,
+		)
+	}
+	pendingArchives := make(chan *Archive, 1024)
+	archiveWg := sync.WaitGroup{}
+	const arbitraryConcurrencyLimit = 4
+	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, a *Archive) (models Archives, err error) {
+		defer archiveWg.Done()
+		if err = Request(
+			ctx, s, Path(db.Database, "archives", a),
+			ResponseBody(JSONBody{&model}),
+		); err != nil {
+			err = errors.ErrorfWithCause(
+				err, "failed to get child archives of "+
+					"%v (ID: %v)",
+				a.ArchiveName, a.ArchiveID,
+			)
+			return
+		}
+		for i := range model.Archives {
+			ar := &model.Archives[i]
+			ar.ArchiveName = strings.Join([]string{
+				a.ArchiveName, ar.ArchiveName,
+			}, "/")
+			archiveWg.Add(1)
+			pendingArchives <- ar
+		}
+		return model, nil
+	}, workers.WorkerCount(arbitraryConcurrencyLimit))
+	go func() {
+		archiveWg.Wait()
+		close(pendingArchives)
+	}()
+	archElems := make([]Archive, 0, 1<<bits.Len(uint(len(model.Archives)*len(model.Archives))))
+	archiveWg.Add(len(model.Archives))
+	for i, a := range model.Archives {
+		ar := &model.Archives[i]
+		archElems = append(archElems, a)
+		pendingArchives <- ar
+	}
+	err = nil
+	for res := range archivesModels {
+		if res.Err != nil {
+			err = errors.ErrorfWithCauseAndContext(
+				res.Err, err, "error encountered "+
+					"while attempting to retrieve "+
+					"subarchives",
+			)
+		}
+		for _, a := range res.Res.Archives {
+			archElems = append(archElems, a)
+		}
+	}
+	db.archs = makeArchs(archElems)
+	return nil
 }

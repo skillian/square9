@@ -60,18 +60,49 @@ where:
 	archive:	The name of the GlobalSearch archive.
 	sub-archive:	Optional sub archive(s)
 
-A gscp pseudo-URI can have query parameters 
+A gscp pseudo-URI can have query parameters starting with a question mark ("?")
+and separated by ampersands ("&").  When a gscp pseudo-URI is a source, then
+the parameters represent prompt or field values to a search.  When a gscp
+pseudo-URI is a target, then the parameters are field values.
 `,
 		),
 	)
+	var fromIndex bool
+	parser.MustAddArgument(
+		argparse.OptionStrings("--from-index"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"source specification is an index; not an individual "+
+				"file",
+		),
+	).MustBind(&fromIndex)
+	var toIndex bool
+	parser.MustAddArgument(
+		argparse.OptionStrings("--to-index"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"destination specification is an index; not an "+
+				"individual file",
+		),
+	).MustBind(&toIndex)
+	var allowOverwrite bool
+	parser.MustAddArgument(
+		argparse.OptionStrings("--overwrite"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"allow existing destination files to be overwritten",
+		),
+	).MustBind(&allowOverwrite)
 	var sourceSpec string
 	parser.MustAddArgument(
 		argparse.Dest("source"),
+		argparse.MetaVar("SOURCE"),
 		argparse.Help("source specification"),
 	).MustBind(&sourceSpec)
 	var destSpec string
 	parser.MustAddArgument(
 		argparse.Dest("destination"),
+		argparse.MetaVar("DEST"),
 		argparse.Help("destination specification"),
 	).MustBind(&destSpec)
 	parser.MustParseArgs()
@@ -103,24 +134,41 @@ A gscp pseudo-URI can have query parameters
 			os.Exit(1)
 		}()
 	}
-	if err := Main(ctx, sourceSpec, destSpec); err != nil {
+	if err := Main(ctx, specInfo{
+		str:   sourceSpec,
+		index: fromIndex,
+	}, specInfo{
+		str:   destSpec,
+		index: toIndex,
+	}, allowOverwrite); err != nil {
 		handleErr(err)
 	}
 }
 
-func Main(ctx context.Context, sourceSpec, destSpec string) error {
-	source, err := gscp.ParseSpec(sourceSpec)
+func Main(ctx context.Context, sourceInfo, destInfo specInfo, allowOverwrite bool) error {
+	source, err := parseSpecInfo(sourceInfo)
 	if err != nil {
-		return errors.Errorf1From(
-			err, "failed to parse %q as a specification",
-			sourceSpec,
-		)
+		return err
 	}
-	dest, err := gscp.ParseSpec(destSpec)
+	dest, err := parseSpecInfo(destInfo)
 	if err != nil {
-		return errors.Errorf1From(
-			err, "failed to parse %q as a specification",
-			destSpec,
-		)
+		return err
 	}
+	return gscp.CopyFromSourceToDestSpec(ctx, source, dest, allowOverwrite)
+}
+
+type specInfo struct {
+	str   string
+	index bool
+}
+
+func parseSpecInfo(si specInfo) (*gscp.Spec, error) {
+	sp, err := gscp.ParseSpec(si.str)
+	if err != nil {
+		return nil, err
+	}
+	if si.index {
+		sp.Kind |= gscp.IndexSpec
+	}
+	return sp, nil
 }

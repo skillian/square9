@@ -1,6 +1,6 @@
 module github.com/skillian/square9
 
-go 1.16
+go 1.18
 
 require (
 	github.com/google/uuid v1.3.0
@@ -8,4 +8,7 @@ require (
 	github.com/skillian/errors v0.0.0-20190910214200-f19f31b303bd
 	github.com/skillian/expr v0.0.0-20220215084646-3e36fbdc1ffd
 	github.com/skillian/logging v0.0.0-20210425124543-4b3b9b919a80
+	github.com/skillian/workers v0.0.0-20220324165209-b3b5e8db799e
 )
+
+require github.com/skillian/textwrap v0.0.0-20190707153458-15c7ee8d44ed // indirect

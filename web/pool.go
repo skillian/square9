@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"sync"
 
 	"github.com/skillian/errors"
@@ -26,13 +27,13 @@ type SessionPool struct {
 	mutex    sync.Mutex
 	sessions chan *Session
 	limit    int
-	factory  func() (*Session, error)
+	factory  func(context.Context) (*Session, error)
 }
 
 var _ Client = (*SessionPool)(nil)
 
 // NewSessionPool creates a pool of clients.
-func NewSessionPool(limit int, factory func() (*Session, error)) *SessionPool {
+func NewSessionPool(limit int, factory func(context.Context) (*Session, error)) *SessionPool {
 	if limit <= 0 {
 		panic("limit cannot be less than or equal to 0")
 	}
@@ -46,7 +47,7 @@ func NewSessionPool(limit int, factory func() (*Session, error)) *SessionPool {
 	return p
 }
 
-func (p *SessionPool) getSession() (*Session, error) {
+func (p *SessionPool) getSession(ctx context.Context) (*Session, error) {
 	sessionOrErr := func(s *Session, ok bool) (*Session, error) {
 		if !ok {
 			return nil, errors.Errorf("Client pool was closed.")
@@ -73,7 +74,7 @@ func (p *SessionPool) getSession() (*Session, error) {
 		// SessionPool (e.g. calling Close in a panic), we'll have a
 		// deadlock if we don't unlock here.
 		p.mutex.Unlock()
-		s, err := p.factory()
+		s, err := p.factory(ctx)
 		if err != nil {
 			p.mutex.Lock()
 			p.limit++
@@ -90,7 +91,7 @@ func (p *SessionPool) getSession() (*Session, error) {
 }
 
 // Session borrows a session from the pool to perform some operation.
-func (p *SessionPool) Session(f func(s *Session) error) error {
+func (p *SessionPool) Session(ctx context.Context, f func(context.Context, *Session) error) error {
 	defer func() {
 		if v := recover(); v != nil {
 			p.mutex.Lock()
@@ -101,12 +102,12 @@ func (p *SessionPool) Session(f func(s *Session) error) error {
 	}()
 	var errs []error
 	for tries := 0; tries < 2; tries++ {
-		s, err := p.getSession()
+		s, err := p.getSession(ctx)
 		if err != nil {
 			errs = append(errs, err)
 			break
 		}
-		err = f(s)
+		err = f(ctx, s)
 		if err == nil {
 			p.sessions <- s
 			return nil
@@ -136,7 +137,7 @@ func (p *SessionPool) Session(f func(s *Session) error) error {
 // Close the pool by waiting for and closing all the sessions from the pool.
 func (p *SessionPool) Close() error {
 	p.mutex.Lock()
-	p.factory = func() (*Session, error) { return nil, errors.Errorf("pool is closing") }
+	p.factory = func(context.Context) (*Session, error) { return nil, errors.Errorf("pool is closing") }
 	limit := p.limit
 	p.limit = 0
 	p.mutex.Unlock()
@@ -190,6 +191,6 @@ func (c *RWClient) ReadOnly() Client { return c.readOnly }
 // Session implements the Client interface by getting the FullAccess or ReadOnly
 // client (depending on how NewRWClient was called) and delegating to that
 // implementation.
-func (c *RWClient) Session(f func(s *Session) error) error {
-	return c.defaulter(c).Session(f)
+func (c *RWClient) Session(ctx context.Context, f func(context.Context, *Session) error) error {
+	return c.defaulter(c).Session(ctx, f)
 }

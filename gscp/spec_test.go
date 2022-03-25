@@ -65,7 +65,7 @@ var parseSpecTests = []parseSpecTest{
 			Hostname:    "hostname",
 			APIPath:     "square9api",
 			Database:    "database",
-			ArchivePath: []string{"archive"},
+			ArchivePath: "archive",
 		},
 	},
 	{
@@ -76,7 +76,7 @@ var parseSpecTests = []parseSpecTest{
 			Hostname:    "hostname",
 			APIPath:     "square9api",
 			Database:    "database",
-			ArchivePath: []string{"archive", "subarchive"},
+			ArchivePath: "archive/subarchive",
 		},
 	},
 	{
@@ -87,19 +87,45 @@ var parseSpecTests = []parseSpecTest{
 			Hostname:    "hostname",
 			APIPath:     "sq9",
 			Database:    "database",
-			ArchivePath: []string{"archive", "subarchive"},
+			ArchivePath: "archive/subarchive",
+		},
+	},
+	{
+		spec: "username:password@hostname/sq9:database/archive/subarchive?hello=world&myName=sean",
+		expect: gscp.Spec{
+			Username:    "username",
+			Password:    "password",
+			Hostname:    "hostname",
+			APIPath:     "sq9",
+			Database:    "database",
+			ArchivePath: "archive/subarchive",
+			Fields: map[string]string{
+				"hello":  "world",
+				"myName": "sean",
+			},
 		},
 	},
 	{
 		spec: "C:\\Users\\Sean\\Downloads",
 		expect: gscp.Spec{
-			Local: "C:\\Users\\Sean\\Downloads",
+			ArchivePath: "C:\\Users\\Sean\\Downloads",
 		},
 	},
 	{
 		spec: "\\\\server\\share",
 		expect: gscp.Spec{
-			Local: "\\\\server\\share",
+			Kind:        gscp.LocalSpec,
+			ArchivePath: "\\\\server\\share",
+		},
+	},
+	{
+		spec: "\\\\server\\share?hello=world",
+		expect: gscp.Spec{
+			Kind:        gscp.LocalSpec,
+			ArchivePath: "\\\\server\\share",
+			Fields: map[string]string{
+				"hello": "world",
+			},
 		},
 	},
 	// negative cases:
@@ -112,15 +138,18 @@ var parseSpecTests = []parseSpecTest{
 func TestParseSpec(t *testing.T) {
 	for _, tc := range parseSpecTests {
 		t.Run(tc.spec, func(t *testing.T) {
-			sp, err := gscp.ParseSpec(tc.spec)
-			if err != nil {
-				if tc.err == "" {
-					t.Fatal(err)
-				}
-				if strings.Contains(err.Error(), tc.err) {
-					return
+			checkErr := func(err error) {
+				if err != nil {
+					if tc.err == "" {
+						t.Fatal(err)
+					}
+					if strings.Contains(err.Error(), tc.err) {
+						t.SkipNow()
+					}
 				}
 			}
+			sp, err := gscp.ParseSpec(tc.spec)
+			checkErr(err)
 			if !sp.Eq(&tc.expect) {
 				t.Fatalf(
 					"expected:\n\t%#v\n\t%#v",

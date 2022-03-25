@@ -120,15 +120,14 @@ func Value(k string, vs ...interface{}) RequestOption {
 func Request(ctx context.Context, s *Session, options ...RequestOption) (Err error) {
 	var r request
 	r.base = s.url
-	for _, o := range options {
-		if Err = o(&r); Err != nil {
+	for _, opt := range options {
+		if Err = opt(&r); Err != nil {
 			return
 		}
 	}
 	if r.method == "" {
 		r.method = GET
 	}
-
 	u, q := r.URLAndQuery()
 	if r.secureID != "" {
 		q.Set(secureIDQueryKey, r.secureID)
@@ -197,10 +196,11 @@ func (r *request) URLAndQuery() (u *url.URL, q url.Values) {
 	return u, q
 }
 
+var emptyReadCloser io.ReadCloser = io.NopCloser(bytes.NewReader(nil))
+
 func (r *request) reqReadCloser(s *Session) (io.ReadCloser, error) {
 	if r.reqBody == nil {
-		// TODO: Is this the right thing to do?
-		return io.NopCloser(bytes.NewReader(nil)), nil
+		return emptyReadCloser, nil
 	}
 	if rc, ok := r.reqBody.(io.ReadCloser); ok {
 		return rc, nil
@@ -320,7 +320,7 @@ const (
 )
 
 func httpStatusOK(code int) bool {
-	return code >= 200 && code < 300
+	return 200 <= code && code < 300
 }
 
 type limitWriter struct {

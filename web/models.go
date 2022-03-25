@@ -245,19 +245,19 @@ type Document struct {
 type DocumentOption string
 
 const (
-	// FileOption gets the document file right from Square 9's storage.
+	// FileOption Returns the requested file
 	FileOption DocumentOption = "File"
 
-	// EmailOption is unknown.
+	// EmailOption Returns a ready-to-email version of the document
 	EmailOption DocumentOption = "Email"
 
-	// PrintOption is unknown.
+	// PrintOption Returns a ready-to-print version of the document
 	PrintOption DocumentOption = "Print"
 
-	// ThumbOption is unknown.
+	// ThumbOption Returns a thumbnail of the document
 	ThumbOption DocumentOption = "Thumb"
 
-	// ZoneOption is unknown.
+	// ZoneOption ---data missing---
 	ZoneOption DocumentOption = "Zone"
 )
 
