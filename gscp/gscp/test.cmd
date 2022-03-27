@@ -1,0 +1,1 @@
+go run main.go --log-console verbose --unsecure "C:\Users\sean\Downloads\Missing Invoice Process and Report Guide - Paperless Solutions Inc.pdf" "ssAdministrator:globalsearch@192.168.0.242:BrewHaven/Accounts Payable/Purchase Orders?Vendor Name=TEST&PO Number=123456"

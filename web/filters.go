@@ -91,6 +91,11 @@ func lookupOf(slice interface{}) lookup {
 
 func (lu lookup) lookup(f IDAndNamerFilter, indexes []int) []int {
 	if f == nil {
+		if cap(indexes)-len(indexes) < len(lu.byID) {
+			temp := make([]int, len(indexes), len(indexes)+len(lu.byID))
+			copy(temp, indexes)
+			indexes = temp
+		}
 		for _, i := range lu.byID {
 			indexes = append(indexes, i)
 		}

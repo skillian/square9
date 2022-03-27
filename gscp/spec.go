@@ -11,10 +11,13 @@ import (
 	"sync"
 
 	"github.com/skillian/expr/errors"
+	"github.com/skillian/logging"
 	"github.com/skillian/square9/web"
 )
 
-const defaultAPIPath = "square9api"
+var logger = logging.GetLogger("square9")
+
+const defaultAPIPath = "square9api/api"
 
 // Spec is a specification for a gscp source or destination.  Either
 // of which could be a local file or a gscp "pseudo-URI."
@@ -65,6 +68,10 @@ const (
 	// IndexSpec is set when the specification refers to an index
 	// of other specifications.
 	IndexSpec
+
+	// UnsecureSpec allows connecting to the non-local spec
+	// with HTTP instead of HTTPS.
+	UnsecureSpec
 )
 
 const (
@@ -110,15 +117,23 @@ func ParseSpec(specString string) (*Spec, error) {
 		i := strings.IndexByte(s, '?')
 		if i == -1 {
 			sp.ArchivePath = s
+			sp.Fields = map[string]string{}
 			return sp, nil
 		} else {
 			sp.ArchivePath = s[:i]
 			s = s[i+1:]
 		}
-		sp.Fields = parseQueryIntoFields(s)
+		fs, err := parseQueryIntoFields(s)
+		if err != nil {
+			return nil, errors.Errorf1From(
+				err, "failed to parse %q as a local specification",
+				s,
+			)
+		}
+		sp.Fields = fs
 		return sp, nil
 	}
-	sp.APIPath = "square9api"
+	sp.APIPath = defaultAPIPath
 	s = strings.TrimPrefix(s, "gscp://")
 	i := strings.IndexByte(s, '@')
 	if i != -1 {
@@ -161,11 +176,18 @@ func ParseSpec(specString string) (*Spec, error) {
 	}
 	sp.ArchivePath = s[:i]
 	s = s[i+1:]
-	sp.Fields = parseQueryIntoFields(s)
+	fs, err := parseQueryIntoFields(s)
+	if err != nil {
+		return nil, errors.Errorf1From(
+			err, "failed to parse %s as a specification",
+			specString,
+		)
+	}
+	sp.Fields = fs
 	return sp, nil
 }
 
-func parseQueryIntoFields(s string) map[string]string {
+func parseQueryIntoFields(s string) (map[string]string, error) {
 	// TODO: Maybe use url.ParseQuery instead?
 	fs := make(map[string]string, strings.Count(s, "&"))
 	for len(s) > 0 {
@@ -174,15 +196,25 @@ func parseQueryIntoFields(s string) map[string]string {
 			i = len(s)
 		}
 		j := strings.IndexByte(s[:i], '=')
-		k := url.QueryEscape(s[:j])
-		v := url.QueryEscape(s[j+1 : i])
+		k, err := url.QueryUnescape(s[:j])
+		if err != nil {
+			return nil, errors.Errorf1From(
+				err, "failed to unescape key: %v", s[:j],
+			)
+		}
+		v, err := url.QueryUnescape(s[j+1 : i])
+		if err != nil {
+			return nil, errors.Errorf1From(
+				err, "failed to unescape value: %v", s[j+1:i],
+			)
+		}
 		fs[k] = v
 		if i == len(s) {
 			break
 		}
 		s = s[i+1:]
 	}
-	return fs
+	return fs, nil
 }
 
 // IsLocal returns true if the specification is a local file specification
@@ -198,9 +230,6 @@ func (sp *Spec) Eq(b *Spec) bool {
 		}
 	}
 	if scalars(sp) != scalars(b) {
-		return false
-	}
-	if len(sp.ArchivePath) != len(b.ArchivePath) {
 		return false
 	}
 	if len(sp.Fields) != len(b.Fields) {
@@ -290,18 +319,6 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, allowOver
 	// return remoteToRemote(ctx, source, dest, allowOverwrite)
 }
 
-func creategetWebClientForSpec(sp *Spec) web.Client {
-	return web.NewSessionPool(1, func(ctx context.Context) (*web.Session, error) {
-		return web.NewSession(
-			ctx,
-			web.APIURLString(strings.Join([]string{
-				"https://", sp.Hostname, "/", sp.APIPath,
-			}, "")),
-			web.BasicAuth(sp.Username, sp.Password),
-		)
-	})
-}
-
 // localCopy copies a local file to another local file.  There's really no
 // reason to use this program to do that, but I figured it'd be a missing
 // edge case if it was just omitted!
@@ -345,6 +362,10 @@ func localCSVToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bo
 	fieldNames, err := getFieldNamesForSourceSpec(ctx, source, dest)
 	if err != nil {
 		return err
+	}
+	if logger.EffectiveLevel() <= logging.VerboseLevel {
+		names := strings.Join(fieldNames, ", ")
+		logger.Verbose1("field names: %s", names)
 	}
 	sourceFile, err := OpenFilenameRead(source.ArchivePath)
 	if err != nil {
@@ -423,6 +444,7 @@ func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) contex
 		ctx,
 		(*webClientMap)(nil),
 		&webClientMap{
+			m:    make(map[webClientKey]web.Client, 2),
 			prev: prev,
 		},
 	)
@@ -480,11 +502,15 @@ func createWebClientKeyFromSpec(sp *Spec) webClientKey {
 }
 
 func createWebSessionsFromSpec(sp *Spec) *web.SessionPool {
+	scheme := "https"
+	if sp.Kind.HasAll(UnsecureSpec) {
+		scheme = scheme[:4]
+	}
 	return web.NewSessionPool(1, func(ctx context.Context) (*web.Session, error) {
 		return web.NewSession(
 			ctx,
 			web.APIURL(&url.URL{
-				Scheme: "https",
+				Scheme: scheme,
 				Host:   sp.Hostname,
 				Path:   sp.APIPath,
 			}),
@@ -528,12 +554,17 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 			Value: v,
 		})
 	}
-	return s.Import(
-		ctx, dbar.db, dbar.arch, flds,
-		writerToFunc(func(w io.Writer) (int64, error) {
-			return io.Copy(w, r)
-		}),
-	)
+	wt, ok := r.(io.WriterTo)
+	if !ok {
+		if f, ok := r.(*os.File); ok {
+			wt = fileNopCloserWriterTo{f}
+		} else {
+			wt = writerToFunc(func(w io.Writer) (int64, error) {
+				return io.Copy(w, r)
+			})
+		}
+	}
+	return s.Import(ctx, dbar.db, dbar.arch, flds, wt)
 }
 
 func WriteSpecTo(ctx context.Context, sp *Spec, w io.Writer) error {
@@ -591,11 +622,15 @@ func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer)
 	if len(res.Docs) == 0 {
 		return errors.Errorf0("no documents found")
 	}
+	rf, ok := w.(io.ReaderFrom)
+	if !ok {
+		rf = readerFromFunc(func(r io.Reader) (int64, error) {
+			return io.Copy(w, r)
+		})
+	}
 	return s.Document(
 		ctx, dbar.db, dbar.arch, &res.Docs[0], web.FileOption,
-		readerFromFunc(func(r io.Reader) (int64, error) {
-			return io.Copy(w, r)
-		}),
+		rf,
 	)
 }
 
@@ -643,10 +678,7 @@ func getFieldNamesForSourceSpec(ctx context.Context, source, dest *Spec) ([]stri
 	}
 	archiveName, ok := source.Fields[ArchiveNameKey]
 	if !ok {
-		archiveName = source.ArchivePath
-		if archiveName == "" {
-			archiveName = dest.ArchivePath
-		}
+		archiveName = clientSpec.ArchivePath
 	}
 	wc, err := getWebClientForSpec(ctx, clientSpec)
 	if err != nil {

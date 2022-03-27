@@ -142,14 +142,3 @@ func readJSONExpect(dec *json.Decoder, token any) error {
 	}
 	return nil
 }
-
-type readCounter struct {
-	n int64
-	r io.Reader
-}
-
-func (r *readCounter) Read(b []byte) (n int, err error) {
-	n, err = r.r.Read(b)
-	r.n += int64(n)
-	return
-}

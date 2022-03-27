@@ -1,0 +1,883 @@
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000130100: http://192.168.0.242/square9api/api/licenses &http.Request{Method:"GET", URL:(*url.URL)(0xc000134240), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000ac648)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000130100: &http.Request{Method:"GET", URL:(*url.URL)(0xc000134240), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000ac648)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[370] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/ sstoken=60b6f04f-248a-4023-8667-b52e52e3beff; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] Ss-Token:[60b6f04f-248a-4023-8667-b52e52e3beff] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc00041c040 370 [] false false map[] 0xc000130100 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404200: http://192.168.0.242/square9api/api/dbs/?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc000400480), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a318)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404200: &http.Request{Method:"GET", URL:(*url.URL)(0xc000400480), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a318)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[626] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc000092600 626 [] false false map[] 0xc000404200 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404500: http://192.168.0.242/square9api/api/dbs/2/archives?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc000400870), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a570)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404500: &http.Request{Method:"GET", URL:(*url.URL)(0xc000400870), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a570)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[2163] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc00004e040 2163 [] false false map[] 0xc000404500 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404900: http://192.168.0.242/square9api/api/dbs/2/archives/1009?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc000400bd0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a7e0)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000130500: http://192.168.0.242/square9api/api/dbs/2/archives/5?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc000134510), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000ac960)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000050100: http://192.168.0.242/square9api/api/dbs/2/archives/1?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc0000441b0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000004258)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000130000: http://192.168.0.242/square9api/api/dbs/2/archives/1005?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc00038c120), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000384078)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000130500: &http.Request{Method:"GET", URL:(*url.URL)(0xc000134510), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000ac960)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[697] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc0003a4180 697 [] false false map[] 0xc000130500 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404900: &http.Request{Method:"GET", URL:(*url.URL)(0xc000400bd0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc00041a7e0)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[1372] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc000092180 1372 [] false false map[] 0xc000404900 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000130000: &http.Request{Method:"GET", URL:(*url.URL)(0xc00038c120), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000384078)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[620] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc00004e180 620 [] false false map[] 0xc000130000 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000050100: &http.Request{Method:"GET", URL:(*url.URL)(0xc0000441b0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000004258)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[765] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc00004e200 765 [] false false map[] 0xc000050100 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).initArchs in session.go, line 558:
+	all archives: (web.archs) {
+	 elems: ([]web.arch) (len=22 cap=22) {
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1,
+	    ArchiveName: (string) (len=16) "Accounts Payable",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 2
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 5,
+	    ArchiveName: (string) (len=19) "Accounts Receivable",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 2
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1005,
+	    ArchiveName: (string) (len=5) "Legal",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 2
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1009,
+	    ArchiveName: (string) (len=15) "Human Resources",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 2
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2025,
+	    ArchiveName: (string) (len=14) "Correspondence",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2032,
+	    ArchiveName: (string) (len=7) "Reports",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2033,
+	    ArchiveName: (string) (len=11) "Recycle Bin",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2034,
+	    ArchiveName: (string) (len=8) "Versions",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 3034,
+	    ArchiveName: (string) (len=8) "Contacts",
+	    Parent: (int) 0,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 6,
+	    ArchiveName: (string) (len=26) "Accounts Receivable/Orders",
+	    Parent: (int) 5,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 7,
+	    ArchiveName: (string) (len=37) "Accounts Receivable/Delivery Receipts",
+	    Parent: (int) 5,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 8,
+	    ArchiveName: (string) (len=28) "Accounts Receivable/Payments",
+	    Parent: (int) 5,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1010,
+	    ArchiveName: (string) (len=31) "Human Resources/Employee Record",
+	    Parent: (int) 1009,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1011,
+	    ArchiveName: (string) (len=32) "Human Resources/Absence Requests",
+	    Parent: (int) 1009,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1012,
+	    ArchiveName: (string) (len=35) "Human Resources/Performance Reviews",
+	    Parent: (int) 1009,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2031,
+	    ArchiveName: (string) (len=23) "Human Resources/Resumes",
+	    Parent: (int) 1009,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2035,
+	    ArchiveName: (string) (len=22) "Human Resources/Policy",
+	    Parent: (int) 1009,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1007,
+	    ArchiveName: (string) (len=24) "Legal/Customer Contracts",
+	    Parent: (int) 1005,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 1008,
+	    ArchiveName: (string) (len=22) "Legal/Vendor Contracts",
+	    Parent: (int) 1005,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 2,
+	    ArchiveName: (string) (len=32) "Accounts Payable/Purchase Orders",
+	    Parent: (int) 1,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 3,
+	    ArchiveName: (string) (len=30) "Accounts Payable/Packing Slips",
+	    Parent: (int) 1,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 0
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  },
+	  (web.arch) {
+	   Archive: (web.Archive) {
+	    ArchiveID: (int) 4,
+	    ArchiveName: (string) (len=32) "Accounts Payable/Vendor Invoices",
+	    Parent: (int) 1,
+	    Permissions: (int) 1048575,
+	    Properties: (int) 2
+	   },
+	   searches: (web.searches) {
+	    elems: ([]web.search) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   },
+	   fields: (web.fields) {
+	    elems: ([]web.FieldDef) <nil>,
+	    lookup: (web.lookup) {
+	     byID: (map[web.ID]int) <nil>,
+	     byName: (map[web.Name]int) <nil>
+	    }
+	   }
+	  }
+	 },
+	 lookup: (web.lookup) {
+	  byID: (map[web.ID]int) (len=22) {
+	   (web.ID) 1011: (int) 13,
+	   (web.ID) 2031: (int) 15,
+	   (web.ID) 1007: (int) 17,
+	   (web.ID) 1008: (int) 18,
+	   (web.ID) 1: (int) 0,
+	   (web.ID) 2033: (int) 6,
+	   (web.ID) 2032: (int) 5,
+	   (web.ID) 6: (int) 9,
+	   (web.ID) 8: (int) 11,
+	   (web.ID) 4: (int) 21,
+	   (web.ID) 5: (int) 1,
+	   (web.ID) 2025: (int) 4,
+	   (web.ID) 2034: (int) 7,
+	   (web.ID) 1012: (int) 14,
+	   (web.ID) 2035: (int) 16,
+	   (web.ID) 3: (int) 20,
+	   (web.ID) 1005: (int) 2,
+	   (web.ID) 1009: (int) 3,
+	   (web.ID) 1010: (int) 12,
+	   (web.ID) 2: (int) 19,
+	   (web.ID) 3034: (int) 8,
+	   (web.ID) 7: (int) 10
+	  },
+	  byName: (map[web.Name]int) (len=22) {
+	   (web.Name) (len=22) "Human Resources/Policy": (int) 16,
+	   (web.Name) (len=32) "Accounts Payable/Purchase Orders": (int) 19,
+	   (web.Name) (len=5) "Legal": (int) 2,
+	   (web.Name) (len=11) "Recycle Bin": (int) 6,
+	   (web.Name) (len=37) "Accounts Receivable/Delivery Receipts": (int) 10,
+	   (web.Name) (len=7) "Reports": (int) 5,
+	   (web.Name) (len=26) "Accounts Receivable/Orders": (int) 9,
+	   (web.Name) (len=31) "Human Resources/Employee Record": (int) 12,
+	   (web.Name) (len=32) "Human Resources/Absence Requests": (int) 13,
+	   (web.Name) (len=35) "Human Resources/Performance Reviews": (int) 14,
+	   (web.Name) (len=16) "Accounts Payable": (int) 0,
+	   (web.Name) (len=19) "Accounts Receivable": (int) 1,
+	   (web.Name) (len=14) "Correspondence": (int) 4,
+	   (web.Name) (len=24) "Legal/Customer Contracts": (int) 17,
+	   (web.Name) (len=30) "Accounts Payable/Packing Slips": (int) 20,
+	   (web.Name) (len=32) "Accounts Payable/Vendor Invoices": (int) 21,
+	   (web.Name) (len=8) "Versions": (int) 7,
+	   (web.Name) (len=23) "Human Resources/Resumes": (int) 15,
+	   (web.Name) (len=22) "Legal/Vendor Contracts": (int) 18,
+	   (web.Name) (len=15) "Human Resources": (int) 3,
+	   (web.Name) (len=8) "Contacts": (int) 8,
+	   (web.Name) (len=28) "Accounts Receivable/Payments": (int) 11
+	  }
+	 }
+	}
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.determineContentType in files.go, line 280:
+	read 512 bytes from gscp.fileNopCloserWriterTo{File:(*os.File)(0xc0000de078)}
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.determineContentType in files.go, line 283:
+	bytes:
+		%PDF-1.5
+	%µµµµ
+	1 0 obj
+	<</Type/Catalog/Pages 2 0 R/Lang(en-US) /StructTreeRoot 30 0 R/MarkInfo<</Marked true>>>>
+	endobj
+	2 0 obj
+	<</Type/Pages/Count 2/Kids[ 3 0 R 17 0 R] >>
+	endobj
+	3 0 obj
+	<</Type/Page/Parent 2 0 R/Resources<</Font<</F1 5 0 R/F2 7 0 R/F3 9 0 R>>/XObject<</Image14 14 0 R/Image16 16 0 R>>/ProcSet[/PDF/Text/ImageB/ImageC/ImageI] >>/MediaBox[ 0 0 612 792] /Contents 4 0 R/Group<</Type/Group/S/Transparency/CS/DeviceRGB>>/Tabs/S/StructParents 0>>
+	endobj
+	4 0 obj
+	<</Filter/FlateDecode/Len
+		content type: application/pdf
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: web.cachedFileNopCloser{cachedFile:(*web.cachedFile)(0xc0004067e0)} (type: web.cachedFileNopCloser), reqBody: web.cachedFileNopCloser{cachedFile:(*web.cachedFile)(0xc0004067e0)} (type: web.cachedFileNopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404200: http://192.168.0.242/square9api/api/files?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"POST", URL:(*url.URL)(0xc000134630), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"multipart/form-data; boundary=57836e35a80054289f9d283d9a4ba5bbfee237b59d1b00317ec738858fc0"}}, Body:web.cachedFileNopCloser{cachedFile:(*web.cachedFile)(0xc0004067e0)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:926863, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404200: &http.Request{Method:"POST", URL:(*url.URL)(0xc000134630), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"multipart/form-data; boundary=57836e35a80054289f9d283d9a4ba5bbfee237b59d1b00317ec738858fc0"}}, Body:web.cachedFileNopCloser{cachedFile:(*web.cachedFile)(0xc0004067e0)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:926863, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[135] Content-Type:[text/plain] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc000092500 135 [] false false map[] 0xc000404200 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404500: http://192.168.0.242/square9api/api/dbs/2/archives/2?Token=60b6f04f-248a-4023-8667-b52e52e3beff&type=fields &http.Request{Method:"GET", URL:(*url.URL)(0xc000134ab0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000048e8)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404500: &http.Request{Method:"GET", URL:(*url.URL)(0xc000134ab0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc0000048e8)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[972] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc0003a4240 972 [] false false map[] 0xc000404500 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).Fields in session.go, line 263:
+	archive Accounts Payable/Purchase Orders (ID: 2) fields: (web.fields) {
+	 elems: ([]web.FieldDef) (len=8 cap=9) {
+	  (web.FieldDef) {
+	   FieldID: (int) 1,
+	   FieldName: (string) (len=11) "Vendor Name",
+	   List: (int) 0,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 2,
+	   FieldName: (string) (len=9) "PO Number",
+	   List: (int) 0,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 3,
+	   FieldName: (string) (len=9) "PO Amount",
+	   List: (int) 0,
+	   Type: (web.FieldType) 4,
+	   Mask: (string) (len=1) "C",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 4,
+	   FieldName: (string) (len=7) "PO Date",
+	   List: (int) 0,
+	   Type: (web.FieldType) 3,
+	   Mask: (string) (len=1) "d",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 5,
+	   FieldName: (string) (len=11) "Cost Center",
+	   List: (int) 4,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 64,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 20,
+	   FieldName: (string) (len=13) "Requisitioner",
+	   List: (int) 0,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 6,
+	   FieldName: (string) (len=12) "Vendor Email",
+	   List: (int) 0,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 0,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  },
+	  (web.FieldDef) {
+	   FieldID: (int) 1052,
+	   FieldName: (string) (len=9) "File Type",
+	   List: (int) 0,
+	   Type: (web.FieldType) 1,
+	   Mask: (string) "",
+	   Size: (int) 50,
+	   RegEx: (string) "",
+	   Prop: (web.FieldProps) 1024,
+	   Parent: (int) 0,
+	   ListF1: (int) 0,
+	   ListF2: (int) 0
+	  }
+	 },
+	 lookup: (web.lookup) {
+	  byID: (map[web.ID]int) (len=8) {
+	   (web.ID) 1052: (int) 7,
+	   (web.ID) 1: (int) 0,
+	   (web.ID) 2: (int) 1,
+	   (web.ID) 3: (int) 2,
+	   (web.ID) 4: (int) 3,
+	   (web.ID) 5: (int) 4,
+	   (web.ID) 20: (int) 5,
+	   (web.ID) 6: (int) 6
+	  },
+	  byName: (map[web.Name]int) (len=8) {
+	   (web.Name) (len=9) "PO Number": (int) 1,
+	   (web.Name) (len=9) "PO Amount": (int) 2,
+	   (web.Name) (len=7) "PO Date": (int) 3,
+	   (web.Name) (len=11) "Cost Center": (int) 4,
+	   (web.Name) (len=13) "Requisitioner": (int) 5,
+	   (web.Name) (len=12) "Vendor Email": (int) 6,
+	   (web.Name) (len=9) "File Type": (int) 7,
+	   (web.Name) (len=11) "Vendor Name": (int) 0
+	  }
+	 }
+	}
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: &bytes.Reader{s:[]uint8{0x7b, 0x22, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x22, 0x3a, 0x5b, 0x7b, 0x22, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x3a, 0x22, 0x31, 0x22, 0x2c, 0x22, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x3a, 0x22, 0x54, 0x45, 0x53, 0x54, 0x22, 0x7d, 0x2c, 0x7b, 0x22, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x3a, 0x22, 0x32, 0x22, 0x2c, 0x22, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x3a, 0x22, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x22, 0x7d, 0x5d, 0x2c, 0x22, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x22, 0x3a, 0x5b, 0x7b, 0x22, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x3a, 0x22, 0x61, 0x61, 0x66, 0x38, 0x38, 0x63, 0x35, 0x66, 0x2d, 0x64, 0x64, 0x34, 0x33, 0x2d, 0x34, 0x65, 0x39, 0x34, 0x2d, 0x38, 0x66, 0x38, 0x34, 0x2d, 0x39, 0x36, 0x36, 0x36, 0x38, 0x32, 0x34, 0x64, 0x66, 0x38, 0x38, 0x30, 0x2e, 0x70, 0x64, 0x66, 0x22, 0x7d, 0x5d, 0x7d}, i:0, prevRune:-1} (type: *bytes.Reader), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000407290)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404a00: http://192.168.0.242/square9api/api/dbs/2/archives/2?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"POST", URL:(*url.URL)(0xc000134d80), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"application/json"}}, Body:io.nopCloser{Reader:(*bytes.Reader)(0xc000407290)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404a00: &http.Request{Method:"POST", URL:(*url.URL)(0xc000134d80), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"application/json"}}, Body:io.nopCloser{Reader:(*bytes.Reader)(0xc000407290)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.valueCtx)(0xc000107b30)} -> (&{500 Internal Server Error 500 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[36] Content-Type:[application/json; charset=utf-8] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] 0xc000092600 36 [] false false map[] 0xc000404a00 <nil>}, <nil>)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 416:
+	request.reqBody: <nil> (type: <nil>), reqBody: io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser)
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 431:
+	check content type of io.nopCloser{Reader:(*bytes.Reader)(0xc000107980)} (type: io.nopCloser) of bytes: ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 438:
+	got content type: text/plain; charset=utf-8.
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 470:
+	executing request 0xc000404e00: http://192.168.0.242/square9api/api/licenses/60b6f04f-248a-4023-8667-b52e52e3beff?Token=60b6f04f-248a-4023-8667-b52e52e3beff &http.Request{Method:"GET", URL:(*url.URL)(0xc000134ea0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000004b88)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.emptyCtx)(0xc0000ae010)} ...
+
+2022-03-26 14:57:06:   Verbose:  square9:  at github.com/skillian/square9/web.(*Session).request in session.go, line 472:
+	executed request: 0xc000404e00: &http.Request{Method:"GET", URL:(*url.URL)(0xc000134ea0), Proto:"HTTP/1.1", ProtoMajor:1, ProtoMinor:1, Header:http.Header{"Authorization":[]string{"Basic c3NBZG1pbmlzdHJhdG9yOmdsb2JhbHNlYXJjaA=="}, "Content-Type":[]string{"text/plain; charset=utf-8"}}, Body:io.nopCloser{Reader:(*io.multiReader)(0xc000004b88)}, GetBody:(func() (io.ReadCloser, error))(nil), ContentLength:0, TransferEncoding:[]string(nil), Close:false, Host:"192.168.0.242", Form:url.Values(nil), PostForm:url.Values(nil), MultipartForm:(*multipart.Form)(nil), Trailer:http.Header(nil), RemoteAddr:"", RequestURI:"", TLS:(*tls.ConnectionState)(nil), Cancel:(<-chan struct {})(nil), Response:(*http.Response)(nil), ctx:(*context.emptyCtx)(0xc0000ae010)} -> (&{200 OK 200 HTTP/1.1 1 1 map[Access-Control-Allow-Headers:[Origin,X-Requested-With,Content-Type,Accept,Authorization,Auth-Token,Onedrive-Token] Access-Control-Allow-Methods:[GET,HEAD,POST,DEBUG,PUT,DELETE,PATCH,OPTIONS] Access-Control-Allow-Origin:[*] Cache-Control:[no-cache] Content-Length:[0] Date:[Sat, 26 Mar 2022 18:57:06 GMT] Expires:[-1] Pragma:[no-cache] Server:[Microsoft-IIS/10.0] Set-Cookie:[authenticatedUser=ssAdministrator; domain=192.168.0.242; expires=Tue, 26-Mar-2024 18:57:07 GMT; path=/] X-Aspnet-Version:[4.0.30319] X-Powered-By:[ASP.NET]] {} 0 [] false false map[] 0xc000404e00 <nil>}, <nil>)
+
+non-success response code: 500 - 500 Internal Server Error
+   at github.com/skillian/square9/web.(*Session).request in C:/Users/sean/go/src/github.com/skillian/square9/web/session.go, line 480
+   at github.com/skillian/square9/web.(*Session).Import in C:/Users/sean/go/src/github.com/skillian/square9/web/session.go, line 232
+   at github.com/skillian/square9/gscp.readIntoDocument in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 562
+   at github.com/skillian/square9/gscp.ReadIntoSpecFrom.func1 in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 529
+   at github.com/skillian/square9/web.(*SessionPool).Session in C:/Users/sean/go/src/github.com/skillian/square9/web/pool.go, line 110
+   at github.com/skillian/square9/gscp.ReadIntoSpecFrom in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 528
+   at github.com/skillian/square9/gscp.singleLocalToRemote in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 357
+   at github.com/skillian/square9/gscp.localToRemote in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 346
+   at github.com/skillian/square9/gscp.CopyFromSourceToDestSpec in C:/Users/sean/go/src/github.com/skillian/square9/gscp/spec.go, line 306
+   at main.Main in C:/Users/sean/go/src/github.com/skillian/square9/gscp/gscp/main.go, line 183
+   at main.main in C:/Users/sean/go/src/github.com/skillian/square9/gscp/gscp/main.go, line 158
+   at runtime.main in C:/Program Files/Go/src/runtime/proc.go, line 250
+   at runtime.goexit in C:/Program Files/Go/src/runtime/asm_amd64.s, line 1571
+
+exit status 0xffffffff

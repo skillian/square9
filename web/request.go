@@ -2,15 +2,19 @@ package web
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/skillian/errors"
 )
@@ -22,18 +26,27 @@ const (
 
 // request is a Square 9-specific REST request
 type request struct {
-	err      error
-	method   HTTPMethod
-	secureID string
-	path     []string
-	values   [][]string
-	reqBody  io.WriterTo
-	resBody  io.ReaderFrom
-	base     *url.URL
+	err         error
+	method      HTTPMethod
+	secureID    string
+	path        []string
+	values      [][]string
+	reqBody     io.WriterTo
+	resBody     io.ReaderFrom
+	contentType string
+	base        *url.URL
 }
 
 // RequestOption configures a Square 9 request.
 type RequestOption func(r *request) error
+
+// ContentType sets the content type of the request
+func ContentType(t string) RequestOption {
+	return func(r *request) error {
+		r.contentType = t
+		return nil
+	}
+}
 
 // Method defines the HTTPMethod to use for a Request.
 func Method(m HTTPMethod) RequestOption {
@@ -116,72 +129,22 @@ func Value(k string, vs ...interface{}) RequestOption {
 	}
 }
 
-// Request a resource from Square 9
-func Request(ctx context.Context, s *Session, options ...RequestOption) (Err error) {
-	var r request
-	r.base = s.url
+func (r *request) init(options []RequestOption) error {
 	for _, opt := range options {
-		if Err = opt(&r); Err != nil {
-			return
+		if err := opt(r); err != nil {
+			return err
 		}
 	}
 	if r.method == "" {
 		r.method = GET
 	}
-	u, q := r.URLAndQuery()
-	if r.secureID != "" {
-		q.Set(secureIDQueryKey, r.secureID)
-	}
-	if s.token != "" {
-		q.Set(tokenQueryKey, s.token)
-	}
-	u.RawQuery = q.Encode()
-	url := u.String()
-	logger.Verbose2("creating HTTP %v request for URL: %q...", r.method, url)
-	reqBody, err := r.reqReadCloser(s)
-	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "error retrieving request body from request %v",
-			r,
-		)
-	}
-	defer errors.WrapDeferred(&Err, reqBody.Close)
-	req, err := http.NewRequestWithContext(
-		ctx, string(r.method), url, reqBody,
-	)
-	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to create new HTTP request for "+
-				"%q", url)
-	}
-	if s.basicAuth[0] != "" {
-		req.SetBasicAuth(s.basicAuth[0], s.basicAuth[1])
-	}
-	logger.Verbose1("executing request %[1]p: %[1]#v ...", req)
-	res, err := s.h.Do(req)
-	logger.Verbose3("executed request: %[1]p: %[1]#v -> (%[2]v, %[3]v)", req, res, err)
-	defer errors.WrapDeferred(&err, res.Body.Close)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return errors.Errorf(
-			"non-success response code: %d - %s",
-			res.StatusCode, res.Status)
-	}
-	if r.resBody != nil {
-		if _, err = r.resBody.ReadFrom(res.Body); err != nil {
-			return errors.ErrorfWithCause(
-				err, "error while handling response body")
-		}
-	}
-	return
+	return nil
 }
 
-// URLAndQuery returns a URL and the query values parsed out of it.  The values
+// urlAndQuery returns a URL and the query values parsed out of it.  The values
 // have to be Encoded and assigned to the URL's (Raw)Query field before the
 // String() function is called on the URL.
-func (r *request) URLAndQuery() (u *url.URL, q url.Values) {
+func (r *request) urlAndQuery() (u *url.URL, q url.Values) {
 	rel := *r.base
 	rel.Path = rel.EscapedPath() + strings.Join(r.path, "/")
 	u = r.base.ResolveReference(&rel)
@@ -196,11 +159,9 @@ func (r *request) URLAndQuery() (u *url.URL, q url.Values) {
 	return u, q
 }
 
-var emptyReadCloser io.ReadCloser = io.NopCloser(bytes.NewReader(nil))
-
-func (r *request) reqReadCloser(s *Session) (io.ReadCloser, error) {
+func (r *request) getReadCloser(s *Session) (rc io.ReadCloser, Err error) {
 	if r.reqBody == nil {
-		return emptyReadCloser, nil
+		return http.NoBody, nil
 	}
 	if rc, ok := r.reqBody.(io.ReadCloser); ok {
 		return rc, nil
@@ -208,51 +169,13 @@ func (r *request) reqReadCloser(s *Session) (io.ReadCloser, error) {
 	if r, ok := r.reqBody.(io.Reader); ok {
 		return io.NopCloser(r), nil
 	}
-	if s.buf == nil {
-		s.buf = bytes.NewBuffer(make([]byte, 0, 2<<20 /* 2 MiB */))
+	cf := newCachedFile()
+	if _, err := r.reqBody.WriteTo(cf); err != nil {
+		return nil, errors.ErrorfWithCause(
+			err, "failed to copy request body into cached file",
+		)
 	}
-	s.buf.Reset()
-	// only use up to 2MiB in memory for temporary files.  If the
-	// file's bigger than that, switch over to a file.
-	var w io.Writer = &limitWriter{s.buf, int64(s.buf.Cap())}
-	_, err := r.reqBody.WriteTo(w)
-	if err == nil {
-		return io.NopCloser(s.buf), nil
-	}
-	if _, ok := err.(*limitedWrite); ok {
-		f, err := os.CreateTemp("", "")
-		if err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "error attempting to create "+
-					"temporary file",
-			)
-		}
-		if sr, ok := r.reqBody.(io.Seeker); ok {
-			if _, err := sr.Seek(0, io.SeekStart); err != nil {
-				return nil, errors.ErrorfWithCause(
-					err, "failed to rewind "+
-						"request body",
-				)
-			}
-		}
-		if _, err := r.reqBody.WriteTo(f); err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to write request body "+
-					"to temporary file",
-			)
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to rewind temporary "+
-					"file after loading from "+
-					"request body",
-			)
-		}
-		return tempFile{f}, nil
-	}
-	return nil, errors.ErrorfWithCause(
-		err, "failed to read request body",
-	)
+	return cf, nil
 }
 
 // Body is the body of a request or response.
@@ -264,36 +187,52 @@ type Body interface {
 	ReadFrom(r io.Reader) (n int64, err error)
 }
 
-// JSONBody implements the Body interface by (un)marshaling requests and
-// responses to/from the server.
-type JSONBody struct {
-	// V is a value that is either marshaled into or from.
+// JSONBodyFrom returns an io.ReadCloser created from JSON marshalled
+// from v.
+func JSONFrom(v interface{}) io.WriterTo {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return errWriterTo{err}
+	}
+	return bytes.NewReader(data)
+}
+
+// JSONBodyTo returns a WriteCloser that when closed will unmarshal
+// the content into the target.
+func JSONTo(v interface{}) io.ReaderFrom {
+	b := jsonResponseBodies.Get().(*jsonResponseBody)
+	b.V = v
+	return b
+}
+
+type jsonResponseBody struct {
 	V interface{}
+	bytes.Buffer
 }
 
-// WriteTo implements the WriterTo interface.
-func (b JSONBody) WriteTo(w io.Writer) (int64, error) {
-	bs, err := json.Marshal(b.V)
-	if err != nil {
-		return 0, err
-	}
-	i, err := w.Write(bs)
-	return int64(i), err
+var jsonResponseBodies = sync.Pool{
+	New: func() interface{} {
+		return &jsonResponseBody{}
+	},
 }
 
-// ReadFrom implements the ReaderFrom interface.
-func (b JSONBody) ReadFrom(r io.Reader) (int64, error) {
-	bs, err := ioutil.ReadAll(r)
-	length := int64(len(bs))
-	if err != nil {
-		return length, err
-	}
-	if err = json.Unmarshal(bs, b.V); err != nil {
-		return length, errors.ErrorfWithCause(
-			err, "failed to unmarshal %q as JSON", bs)
-	}
-	return length, err
+func (b *jsonResponseBody) Close() error {
+	err := json.Unmarshal(b.Buffer.Bytes(), b.V)
+	b.Buffer.Reset()
+	b.V = nil
+	jsonResponseBodies.Put(b)
+	return err
 }
+
+type errWriterTo struct {
+	err error
+}
+
+func (ewt errWriterTo) WriteTo(w io.Writer) (int64, error) {
+	return 0, ewt.err
+}
+
+func (ewt errWriterTo) Close() error { return nil }
 
 // ReaderBody implements io.WriterTo by copying to the reader.
 type ReaderBody struct {
@@ -302,6 +241,9 @@ type ReaderBody struct {
 
 // WriteTo the writer by copying from the reader.
 func (b ReaderBody) WriteTo(w io.Writer) (int64, error) {
+	if wt, ok := b.Reader.(io.WriterTo); ok {
+		return wt.WriteTo(w)
+	}
 	return io.Copy(w, b)
 }
 
@@ -322,6 +264,12 @@ const (
 func httpStatusOK(code int) bool {
 	return 200 <= code && code < 300
 }
+
+type nopReaderFromCloser struct {
+	io.ReaderFrom
+}
+
+func (c nopReaderFromCloser) Close() error { return nil }
 
 type limitWriter struct {
 	w io.Writer
@@ -365,4 +313,81 @@ func (f tempFile) Close() error {
 		)
 	}
 	return nil
+}
+
+// copyIntoMultipartForm copies an io.WriterTo into a multipart/form-data form
+// which is then written into w.
+func copyIntoMultipartForm(wt io.WriterTo, w io.Writer) (contentType string, err error) {
+	form := multipart.NewWriter(w)
+	h := make(textproto.MIMEHeader)
+	length, err := getContentLength(wt)
+	if err != nil {
+		return "", err
+	}
+	h.Set("Content-Length", strconv.FormatInt(length, 10))
+	contentType = "application/octet-stream"
+	if r, ok := wt.(io.Reader); ok {
+		r, contentType, err = determineContentType(r)
+		if err != nil {
+			return "", err
+		}
+		wt = writerToFunc(func(w io.Writer) (int64, error) {
+			return io.Copy(w, r)
+		})
+	}
+	h.Set("Content-Type", contentType)
+	ext := ""
+	exts, err := mime.ExtensionsByType(contentType)
+	if err != nil {
+		return "", errors.ErrorfWithCause(
+			err, "failed to get extension for content type %v",
+			contentType,
+		)
+	}
+	if len(exts) > 0 {
+		ext = exts[0]
+	}
+	h.Set(
+		"Content-Disposition",
+		fmt.Sprintf(
+			`form-data; name="File"; filename="File%s"`,
+			ext,
+		),
+	)
+	w, err = form.CreatePart(h)
+	if err != nil {
+		return "", errors.ErrorfWithCause(
+			err, "failed to create form file",
+		)
+	}
+	if _, err := wt.WriteTo(w); err != nil {
+		return "", errors.ErrorfWithCause(
+			err, "failed to write import file into "+
+				"multipart message",
+		)
+	}
+	if err := form.Close(); err != nil {
+		return "", errors.ErrorfWithCause(
+			err, "failed to close multipart message",
+		)
+	}
+	return form.FormDataContentType(), nil
+}
+
+func getContentLength(wt io.WriterTo) (int64, error) {
+	if sr, ok := wt.(interface{ Stat() (fs.FileInfo, error) }); ok {
+		st, err := sr.Stat()
+		if err != nil {
+			return 0, errors.ErrorfWithCause(
+				err, "failed to stat request body %+v to "+
+					"get content length",
+				wt,
+			)
+		}
+		return st.Size(), nil
+	}
+	if lr, ok := wt.(interface{ Len() int }); ok {
+		return int64(lr.Len()), nil
+	}
+	return 0, nil
 }

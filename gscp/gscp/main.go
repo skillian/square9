@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"os/user"
-	"path/filepath"
 	"runtime/pprof"
 
 	"github.com/skillian/argparse"
@@ -16,21 +14,7 @@ import (
 )
 
 var (
-	homePath = func() string {
-		me, err := user.Current()
-		if err != nil {
-			panic(err)
-		}
-		return me.HomeDir
-	}()
-
-	defaultConfigFilename = filepath.Join(
-		homePath,
-		".config",
-		"s9.json",
-	)
-
-	logger = logging.GetLogger("gscp")
+	logger = logging.GetLogger("square9")
 )
 
 func main() {
@@ -67,6 +51,15 @@ pseudo-URI is a target, then the parameters are field values.
 `,
 		),
 	)
+	var consoleLogLevel string
+	parser.MustAddArgument(
+		argparse.OptionStrings("--log-console"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Help(
+			"enable logging for the console at the "+
+				"given level",
+		),
+	).MustBind(&consoleLogLevel)
 	var fromIndex bool
 	parser.MustAddArgument(
 		argparse.OptionStrings("--from-index"),
@@ -93,16 +86,27 @@ pseudo-URI is a target, then the parameters are field values.
 			"allow existing destination files to be overwritten",
 		),
 	).MustBind(&allowOverwrite)
+	var unsecure bool
+	parser.MustAddArgument(
+		argparse.OptionStrings("--unsecure"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"use HTTP instead of HTTPS.  This is almost "+
+				"certainly a very bad idea.",
+		),
+	).MustBind(&unsecure)
 	var sourceSpec string
 	parser.MustAddArgument(
 		argparse.Dest("source"),
 		argparse.MetaVar("SOURCE"),
+		argparse.Nargs(1),
 		argparse.Help("source specification"),
 	).MustBind(&sourceSpec)
 	var destSpec string
 	parser.MustAddArgument(
 		argparse.Dest("destination"),
 		argparse.MetaVar("DEST"),
+		argparse.Nargs(1),
 		argparse.Help("destination specification"),
 	).MustBind(&destSpec)
 	parser.MustParseArgs()
@@ -134,41 +138,26 @@ pseudo-URI is a target, then the parameters are field values.
 			os.Exit(1)
 		}()
 	}
-	if err := Main(ctx, specInfo{
-		str:   sourceSpec,
-		index: fromIndex,
-	}, specInfo{
-		str:   destSpec,
-		index: toIndex,
-	}, allowOverwrite); err != nil {
+	if consoleLogLevel != "" {
+		lvl, ok := logging.ParseLevel(consoleLogLevel)
+		if !ok {
+			handleErr(errors.Errorf(
+				"invalid logging level: %q",
+				consoleLogLevel,
+			))
+		}
+		handler := &logging.ConsoleHandler{}
+		handler.SetFormatter(logging.DefaultFormatter{})
+		handler.SetLevel(lvl)
+		logger.AddHandler(handler)
+		if lvl < logger.Level() {
+			logger.SetLevel(lvl)
+		}
+	}
+	if err := gscp.Main(
+		ctx, fromIndex, sourceSpec, toIndex, destSpec,
+		allowOverwrite, unsecure,
+	); err != nil {
 		handleErr(err)
 	}
-}
-
-func Main(ctx context.Context, sourceInfo, destInfo specInfo, allowOverwrite bool) error {
-	source, err := parseSpecInfo(sourceInfo)
-	if err != nil {
-		return err
-	}
-	dest, err := parseSpecInfo(destInfo)
-	if err != nil {
-		return err
-	}
-	return gscp.CopyFromSourceToDestSpec(ctx, source, dest, allowOverwrite)
-}
-
-type specInfo struct {
-	str   string
-	index bool
-}
-
-func parseSpecInfo(si specInfo) (*gscp.Spec, error) {
-	sp, err := gscp.ParseSpec(si.str)
-	if err != nil {
-		return nil, err
-	}
-	if si.index {
-		sp.Kind |= gscp.IndexSpec
-	}
-	return sp, nil
 }

@@ -1,6 +1,10 @@
 package web
 
-import "github.com/skillian/errors"
+import (
+	"unsafe"
+
+	"github.com/skillian/errors"
+)
 
 // SearchCriterion is a single search parameter
 type SearchCriterion struct {
@@ -75,9 +79,8 @@ func makeArchs(as []Archive) archs {
 // arch is a per-sesion cache of a Square 9 archive
 type arch struct {
 	Archive
-	childArchs archs
-	searches   searches
-	fields     fields
+	searches searches
+	fields   fields
 }
 
 type searches struct {
@@ -93,4 +96,16 @@ type search struct {
 type fields struct {
 	elems []FieldDef
 	lookup
+}
+
+func equals(a, b interface{}) (equal bool) {
+	defer func() {
+		if v := recover(); v != nil {
+			dataOf := func(x interface{}) [2]uintptr {
+				return *((*[2]uintptr)(unsafe.Pointer(&x)))
+			}
+			equal = dataOf(a) == dataOf(b)
+		}
+	}()
+	return a == b
 }

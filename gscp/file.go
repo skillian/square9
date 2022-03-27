@@ -8,6 +8,8 @@ import (
 	"github.com/skillian/expr/errors"
 )
 
+// OpenFilenameRead calls os.Open but wraps the error with more
+// context if opening fails.
 func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -19,24 +21,31 @@ func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func OpenFilenameCreate(filename string, overwrite bool) (io.WriteCloser, error) {
-	if !overwrite {
-		if _, err := os.Stat(filename); !os.IsNotExist(err) {
-			return nil, errors.Errorf1From(
-				err, "refusing to overwrite existing file %v",
-				filename,
-			)
-		}
+// OpenFilenameCreate calls os.Create but first checks
+func OpenFilenameCreate(filename string, overwrite bool) (wc io.WriteCloser, err error) {
+	if overwrite {
+		wc, err = os.Create(filename)
+	} else {
+		wc, err = os.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
 	}
-	f, err := os.Create(filename)
 	if err != nil {
 		return nil, errors.Errorf1From(
 			err, "failed to open output file %v for writing",
 			filename,
 		)
 	}
-	return f, nil
+	return
 }
+
+type fileNopCloserWriterTo struct {
+	*os.File
+}
+
+func (fwt fileNopCloserWriterTo) WriteTo(w io.Writer) (int64, error) {
+	return io.Copy(w, fwt.File)
+}
+
+func (fwt fileNopCloserWriterTo) Close() error { return nil }
 
 type readerFromFunc func(r io.Reader) (int64, error)
 

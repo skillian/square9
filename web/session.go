@@ -8,11 +8,15 @@ import (
 	"io"
 	"math/bits"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/skillian/errors"
+	"github.com/skillian/logging"
 	"github.com/skillian/workers"
 )
 
@@ -43,7 +47,7 @@ type Session struct {
 	lic *License
 	dbs
 
-	buf *bytes.Buffer
+	bufs sync.Pool
 }
 
 // SessionOption configures a session
@@ -97,6 +101,14 @@ func APIURLString(u string) SessionOption {
 // NewSession creates a new Square 9 session.
 func NewSession(ctx context.Context, options ...SessionOption) (*Session, error) {
 	s := &Session{}
+	s.bufs.New = func() any {
+		b := &sessionBuffer{s: s}
+		// only use up to 2MiB in memory for temporary files.
+		// If the file's bigger than that, switch over to a
+		// file.
+		b.Grow(2 << 20 /* 2MiB */)
+		return b
+	}
 	for _, opt := range options {
 		if err := opt(s); err != nil {
 			return nil, err
@@ -114,7 +126,10 @@ func NewSession(ctx context.Context, options ...SessionOption) (*Session, error)
 		u.Path = u.EscapedPath() + "/"
 		s.url = u
 	}
-	if err := Request(ctx, s, Path("licenses"), ResponseBody(JSONBody{&s.lic})); err != nil {
+	if err := s.request(
+		ctx, Path("licenses"),
+		ResponseBody(JSONTo(&s.lic)),
+	); err != nil {
 		return nil, errors.ErrorfWithCause(
 			err, "failed to get license")
 	}
@@ -128,7 +143,7 @@ var _ Client = (*Session)(nil)
 func (s *Session) Databases(ctx context.Context, f IDAndNamerFilter) (ds []Database, err error) {
 	if s.dbs.elems == nil {
 		var model Databases
-		err = Request(ctx, s, Path("dbs", ""), ResponseBody(JSONBody{&model}))
+		err = s.request(ctx, Path("dbs", ""), ResponseBody(JSONTo(&model)))
 		if err != nil {
 			return nil, errors.ErrorfWithCause(
 				err, "failed to get database list")
@@ -176,10 +191,11 @@ func (s *Session) Archives(ctx context.Context, d *Database, f IDAndNamerFilter)
 // document must have been returned from a previous call to Search with the
 // same session or else it will fail.
 func (s *Session) Document(ctx context.Context, d *Database, a *Archive, doc *Document, o DocumentOption, rf io.ReaderFrom) error {
-	err := Request(ctx, s,
-		Path(d, a, "documents", doc.DocumentID, o),
+	err := s.request(
+		ctx, Path(d, a, "documents", doc.DocumentID, o),
 		SecureID(doc.Hash),
-		ResponseBody(rf))
+		ResponseBody(nopReaderFromCloser{rf}),
+	)
 	if err != nil {
 		return errors.ErrorfWithCause(err, "failed to get document %v", doc)
 	}
@@ -187,18 +203,36 @@ func (s *Session) Document(ctx context.Context, d *Database, a *Archive, doc *Do
 }
 
 // Import one or more files to an archive with the given fields.
-func (s *Session) Import(ctx context.Context, d *Database, a *Archive, fs []ImportField, wts ...io.WriterTo) error {
+func (s *Session) Import(ctx context.Context, d *Database, a *Archive, ifs []ImportField, wts ...io.WriterTo) (Err error) {
 	id := ImportDocument{
-		Fields: fs,
+		Fields: make([]ImportField, len(ifs)),
 		Files:  make([]ImportFile, len(wts)),
 	}
-	for i, wt := range wts {
-		err := Request(ctx, s, Method(POST), Path("files"), RequestBody(wt), ResponseBody(JSONBody{&id.Files[i]}))
+	cf := newCachedFile()
+	defer errors.WrapDeferred(&Err, cf.Close)
+	for _, wt := range wts {
+		cf.Reset()
+		contentType, err := copyIntoMultipartForm(wt, cf)
 		if err != nil {
+			return err
+		}
+		if err = s.request(
+			ctx, Method(POST),
+			Path("files"),
+			RequestBody(cf.NopCloser()),
+			ContentType(contentType),
+			ResponseBody(JSONTo(&id)),
+		); err != nil {
 			return errors.ErrorfWithCause(err, "error uploading %v", wt)
 		}
 	}
-	return Request(ctx, s, Path(d, a), RequestBody(JSONBody{id}))
+	if err := s.setImportDocumentFields(ctx, d, a, ifs, &id); err != nil {
+		return err
+	}
+	return s.request(
+		ctx, Method(POST), Path(d, a), RequestBody(JSONFrom(id)),
+		ContentType("application/json"),
+	)
 }
 
 // Fields gets all the fields in an Archive matching the filter.
@@ -217,16 +251,23 @@ func (s *Session) Fields(ctx context.Context, d *Database, a *Archive, f IDAndNa
 		return nil, err
 	}
 	if ar.fields.elems == nil {
-		err = Request(
-			ctx, s, Path(d, a), Value("type", "fields"),
-			ResponseBody(JSONBody{&ar.fields.elems}))
+		err = s.request(
+			ctx, Path(d, a), Value("type", "fields"),
+			ResponseBody(JSONTo(&ar.fields.elems)))
 		if err != nil {
 			return nil, errors.ErrorfWithCause(
 				err, "failed to get fields from archive %v", a)
 		}
 		ar.fields.lookup = lookupOf(ar.fields.elems)
+		if logger.EffectiveLevel() <= logging.VerboseLevel {
+			logger.Verbose3(
+				"archive %s (ID: %d) fields: %v",
+				a.ArchiveName, a.ArchiveID,
+				spew.Sdump(ar.fields),
+			)
+		}
 	}
-	for _, i := range ar.searches.lookup.lookup(f, nil) {
+	for _, i := range ar.fields.lookup.lookup(f, make([]int, 0, len(ar.fields.elems))) {
 		fds = append(fds, ar.fields.elems[i])
 	}
 	return
@@ -247,8 +288,10 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 		return nil, err
 	}
 	if ar.searches.elems == nil {
-		err = Request(
-			ctx, s, Path(d, a, "searches"), ResponseBody(JSONBody{&ar.searches.elems}))
+		err = s.request(
+			ctx, Path(d, a, "searches"),
+			ResponseBody(JSONTo(&ar.searches.elems)),
+		)
 		if err != nil {
 			return nil, errors.ErrorfWithCause(
 				err, "failed to get searches from archive %v", a)
@@ -267,7 +310,7 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 
 // Search executes a search
 func (s *Session) Search(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, options ...RequestOption) (rs Results, err error) {
-	err = s.executeSearch(ctx, d, a, sr, fs, JSONBody{&rs}, options...)
+	err = s.executeSearch(ctx, d, a, sr, fs, JSONTo(&rs), options...)
 	return
 }
 
@@ -319,12 +362,16 @@ func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr
 		reqOpts = append(reqOpts, Value("SearchCriteria", string(bs)))
 	}
 	reqOpts = append(reqOpts, options...)
-	return Request(ctx, s, reqOpts...)
+	return s.request(ctx, reqOpts...)
 }
 
 // Close the session, releasing the license.
 func (s *Session) Close() error {
-	return Request(context.Background(), s, Method(DELETE), Path("licenses", s.token))
+	return s.request(
+		context.Background(),
+		Method(GET),
+		Path("licenses", s.token),
+	)
 }
 
 // Session implements the client interface by just passing in itself.
@@ -332,11 +379,128 @@ func (s *Session) Session(ctx context.Context, f func(context.Context, *Session)
 	return f(ctx, s)
 }
 
+// request a resource from Square 9
+func (s *Session) request(ctx context.Context, options ...RequestOption) (Err error) {
+	var r request
+	r.base = s.url
+	if err := r.init(options); err != nil {
+		return err
+	}
+	if cl, ok := r.resBody.(io.Closer); ok {
+		defer errors.WrapDeferred(&Err, cl.Close)
+	}
+	if cl, ok := r.reqBody.(io.Closer); ok {
+		defer errors.WrapDeferred(&Err, cl.Close)
+	}
+
+	u, q := r.urlAndQuery()
+	if r.secureID != "" {
+		q.Set(secureIDQueryKey, r.secureID)
+	}
+	if s.token != "" {
+		q.Set(tokenQueryKey, s.token)
+	}
+	u.RawQuery = q.Encode()
+	url := u.String()
+
+	reqBody, err := r.getReadCloser(s)
+	if err != nil {
+		return errors.ErrorfWithCause(
+			err, "error retrieving request body from request %v",
+			r,
+		)
+	}
+	if !equals(reqBody, r.reqBody) {
+		defer errors.WrapDeferred(&Err, reqBody.Close)
+	}
+	logger.Verbose2(
+		"request.reqBody: %#[1]v (type: %[1]T), "+
+			"reqBody: %#[2]v (type: %[2]T)",
+		r.reqBody, reqBody,
+	)
+
+	if r.contentType == "" {
+		buf := s.bufs.Get().(*sessionBuffer)
+		defer errors.WrapDeferred(&Err, buf.Close)
+		if _, err := io.Copy(buf, io.LimitReader(reqBody, 512)); err != nil {
+			return errors.ErrorfWithCause(
+				err, "failed to \"peek\" at request "+
+					"body to determine content type",
+			)
+		}
+		logger.Verbose2(
+			"check content type of %#[1]v (type: %[1]T) "+
+				"of bytes: %[2]s...",
+			reqBody,
+			buf.Bytes(),
+		)
+		r.contentType = http.DetectContentType(buf.Bytes())
+		logger.Verbose("got content type: %s.", r.contentType)
+		reqBody = io.NopCloser(io.MultiReader(buf, reqBody))
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx, string(r.method), url, reqBody,
+	)
+	if err != nil {
+		return errors.ErrorfWithCause(
+			err, "failed to create new HTTP request for "+
+				"%q", url)
+	}
+
+	if s.basicAuth[0] != "" {
+		req.SetBasicAuth(s.basicAuth[0], s.basicAuth[1])
+	}
+	if r.contentType != "" {
+		req.Header.Set("Content-Type", r.contentType)
+	}
+	length, err := getContentLength(r.reqBody)
+	if err != nil {
+		return err
+	}
+	req.ContentLength = length
+
+	if logger.EffectiveLevel() <= logging.VerboseLevel {
+		data, err := httputil.DumpRequestOut(req, true)
+		if err != nil {
+			logger.LogErr(err)
+		} else if len(data) < 1024 {
+			logger.Verbose1("data:\n%s", data)
+		} else {
+			logger.Verbose2(
+				"data (truncated):\n%s\n...\n%s",
+				data[:512], data[len(data)-512:],
+			)
+		}
+	}
+	logger.Verbose2("executing request %[1]p: %[2]v %#[1]v ...", req, url)
+	res, err := s.h.Do(req)
+	logger.Verbose3("executed request: %[1]p: %#[1]v -> (%[2]v, %[3]v)", req, res, err)
+	if res != nil && res.Body != nil {
+		defer errors.WrapDeferred(&err, res.Body.Close)
+	}
+	if err != nil {
+		return err
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return errors.Errorf(
+			"non-success response code: %d - %s",
+			res.StatusCode, res.Status)
+	}
+	if r.resBody != nil {
+		if _, err = r.resBody.ReadFrom(res.Body); err != nil {
+			return errors.ErrorfWithCause(
+				err, "error while handling response body")
+		}
+	}
+	return
+}
+
 func (s *Session) initArchs(ctx context.Context, db *db) error {
 	var model Archives
-	err := Request(
-		ctx, s, Path(db.Database, "archives"),
-		ResponseBody(JSONBody{&model}),
+	err := s.request(
+		ctx, Path(&db.Database, "archives"),
+		ResponseBody(JSONTo(&model)),
 	)
 	if err != nil {
 		return errors.ErrorfWithCause(
@@ -346,12 +510,14 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 	}
 	pendingArchives := make(chan *Archive, 1024)
 	archiveWg := sync.WaitGroup{}
+	archiveWg.Add(len(model.Archives))
 	const arbitraryConcurrencyLimit = 4
 	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, a *Archive) (models Archives, err error) {
+		var model Archives
 		defer archiveWg.Done()
-		if err = Request(
-			ctx, s, Path(db.Database, "archives", a),
-			ResponseBody(JSONBody{&model}),
+		if err = s.request(
+			ctx, Path(&db.Database, a),
+			ResponseBody(JSONTo(&model)),
 		); err != nil {
 			err = errors.ErrorfWithCause(
 				err, "failed to get child archives of "+
@@ -375,7 +541,6 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 		close(pendingArchives)
 	}()
 	archElems := make([]Archive, 0, 1<<bits.Len(uint(len(model.Archives)*len(model.Archives))))
-	archiveWg.Add(len(model.Archives))
 	for i, a := range model.Archives {
 		ar := &model.Archives[i]
 		archElems = append(archElems, a)
@@ -395,5 +560,58 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 		}
 	}
 	db.archs = makeArchs(archElems)
+	if logger.EffectiveLevel() <= logging.VerboseLevel {
+		logger.Verbose("all archives: %v", spew.Sdump(db.archs))
+	}
+	return err
+}
+
+// setImportDocumentFields initializes an ImportDocument's fields from a set
+// of fields.  The field's "name" key actually holds a string representation
+// of the field ID, not the field's name.
+func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *Archive, ifs []ImportField, id *ImportDocument) error {
+	flds, err := s.Fields(ctx, d, a, nil)
+	if err != nil {
+		return errors.ErrorfWithCause(
+			err, "failed to get fields for archive %v", a,
+		)
+	}
+	if len(id.Fields) < len(ifs) {
+		if cap(id.Fields) < len(ifs) {
+			id.Fields = make([]ImportField, len(ifs))
+		}
+	}
+	id.Fields = id.Fields[:len(ifs)]
+	for i, f := range ifs {
+		fieldFound := false
+		for _, fld := range flds {
+			if f.Name != fld.FieldName {
+				continue
+			}
+			fieldFound = true
+			id.Fields[i] = ImportField{
+				Name:  strconv.FormatInt(int64(fld.FieldID), 10),
+				Value: f.Value,
+			}
+			break
+		}
+		if !fieldFound {
+			return errors.Errorf(
+				"archive %v has no field %q", a.ArchiveName,
+				f.Name,
+			)
+		}
+	}
+	return nil
+}
+
+type sessionBuffer struct {
+	s *Session
+	bytes.Buffer
+}
+
+func (b *sessionBuffer) Close() error {
+	b.Buffer.Reset()
+	b.s.bufs.Put(b)
 	return nil
 }

@@ -18,7 +18,7 @@ var parseSpecTests = []parseSpecTest{
 		spec: "hostname:database",
 		expect: gscp.Spec{
 			Hostname: "hostname",
-			APIPath:  "square9api",
+			APIPath:  "square9api/api",
 			Database: "database",
 		},
 	},
@@ -26,7 +26,7 @@ var parseSpecTests = []parseSpecTest{
 		spec: "gscp://hostname:database",
 		expect: gscp.Spec{
 			Hostname: "hostname",
-			APIPath:  "square9api",
+			APIPath:  "square9api/api",
 			Database: "database",
 		},
 	},
@@ -35,7 +35,7 @@ var parseSpecTests = []parseSpecTest{
 		expect: gscp.Spec{
 			Username: "username",
 			Hostname: "hostname",
-			APIPath:  "square9api",
+			APIPath:  "square9api/api",
 			Database: "database",
 		},
 	},
@@ -45,7 +45,7 @@ var parseSpecTests = []parseSpecTest{
 			Username: "username",
 			Password: "password",
 			Hostname: "hostname",
-			APIPath:  "square9api",
+			APIPath:  "square9api/api",
 			Database: "database",
 		},
 	},
@@ -63,7 +63,7 @@ var parseSpecTests = []parseSpecTest{
 		expect: gscp.Spec{
 			Username:    "username",
 			Hostname:    "hostname",
-			APIPath:     "square9api",
+			APIPath:     "square9api/api",
 			Database:    "database",
 			ArchivePath: "archive",
 		},
@@ -74,7 +74,7 @@ var parseSpecTests = []parseSpecTest{
 			Username:    "username",
 			Password:    "password",
 			Hostname:    "hostname",
-			APIPath:     "square9api",
+			APIPath:     "square9api/api",
 			Database:    "database",
 			ArchivePath: "archive/subarchive",
 		},
@@ -97,6 +97,21 @@ var parseSpecTests = []parseSpecTest{
 			Password:    "password",
 			Hostname:    "hostname",
 			APIPath:     "sq9",
+			Database:    "database",
+			ArchivePath: "archive/subarchive",
+			Fields: map[string]string{
+				"hello":  "world",
+				"myName": "sean",
+			},
+		},
+	},
+	{
+		spec: "username:password@hostname/square9api/api:database/archive/subarchive?hello=world&myName=sean",
+		expect: gscp.Spec{
+			Username:    "username",
+			Password:    "password",
+			Hostname:    "hostname",
+			APIPath:     "square9api/api",
 			Database:    "database",
 			ArchivePath: "archive/subarchive",
 			Fields: map[string]string{
