@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -267,7 +268,9 @@ func (s *Session) Fields(ctx context.Context, d *Database, a *Archive, f IDAndNa
 			)
 		}
 	}
-	for _, i := range ar.fields.lookup.lookup(f, make([]int, 0, len(ar.fields.elems))) {
+	fieldIndexes := ar.fields.lookup.lookup(f, make([]int, 0, len(ar.fields.elems)))
+	sort.Ints(fieldIndexes)
+	for _, i := range fieldIndexes {
 		fds = append(fds, ar.fields.elems[i])
 	}
 	return
@@ -301,6 +304,11 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 			src := &ar.searches.elems[i]
 			src.lookup = lookupOf(src.Detail)
 		}
+		if logger.EffectiveLevel() <= logging.DebugLevel {
+			logger.Debug(
+				"searches: %v", spew.Sdump(ar.searches),
+			)
+		}
 	}
 	for _, i := range ar.searches.lookup.lookup(f, nil) {
 		srs = append(srs, ar.searches.elems[i].Search)
@@ -319,9 +327,10 @@ func (s *Session) SearchResultsIterator(ctx context.Context, d *Database, a *Arc
 	it := &ResultsIterator{
 		cancel: cancel,
 		done:   make(chan error),
+		docs:   make(chan *Document),
 	}
 	go func() {
-		it.done <- s.executeSearch(ctx, d, a, sr, fs, it)
+		it.done <- s.executeSearch(ctx, d, a, sr, fs, (*resultsIteratorReaderFrom)(it))
 	}()
 	return it
 }
@@ -335,6 +344,10 @@ func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr
 		return err
 	}
 	sr = &srs[0]
+	ar, err := s.dbs.arch(d.ID(), a.ID())
+	if err != nil {
+		return err
+	}
 	src, err := s.dbs.search(d.ID(), a.ID(), sr.ID())
 	if err != nil {
 		return err
@@ -346,12 +359,11 @@ func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr
 		nil,
 	}[:3]
 	if len(fs) > 0 {
-		crit := make(map[int]string)
-		for _, f := range fs {
-			for _, i := range src.lookup.lookup(f.Prompt, nil) {
-				p := src.Search.Detail[i]
-				crit[p.PromptID] = fmt.Sprint(f.Value)
-			}
+		crit, err := s.initSearchCriteria(ctx, ar, src, fs)
+		if err != nil {
+			return errors.ErrorfWithCause(
+				err, "failed to initialize search criteria",
+			)
 		}
 		bs, err := json.Marshal(crit)
 		if err != nil {
@@ -465,17 +477,16 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 		if err != nil {
 			logger.LogErr(err)
 		} else if len(data) < 1024 {
-			logger.Verbose1("data:\n%s", data)
+			logger.Verbose2("executing request %p.  data:\n%s", req, data)
 		} else {
-			logger.Verbose2(
-				"data (truncated):\n%s\n...\n%s",
-				data[:512], data[len(data)-512:],
+			logger.Verbose3(
+				"executing request %p.  data (truncated):\n%s\n...\n%s",
+				req, data[:512], data[len(data)-512:],
 			)
 		}
 	}
-	logger.Verbose2("executing request %[1]p: %[2]v %#[1]v ...", req, url)
 	res, err := s.h.Do(req)
-	logger.Verbose3("executed request: %[1]p: %#[1]v -> (%[2]v, %[3]v)", req, res, err)
+	logger.Verbose3("executed request: %[1]p: (%[2]v, %[3]v)", req, res, err)
 	if res != nil && res.Body != nil {
 		defer errors.WrapDeferred(&err, res.Body.Close)
 	}
@@ -603,6 +614,55 @@ func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *A
 		}
 	}
 	return nil
+}
+
+func (s *Session) initSearchCriteria(ctx context.Context, ar *arch, src *search, fs []SearchCriterion) (criteria map[int64]string, err error) {
+	criteria = make(map[int64]string)
+	for _, f := range fs {
+		indexes := src.lookup.lookup(f.Prompt, nil)
+		if len(indexes) > 0 {
+			for _, i := range indexes {
+				p := src.Search.Detail[i]
+				criteria[p.PromptID] = fmt.Sprint(f.Value)
+			}
+			continue
+		}
+		indexes = ar.fields.lookup.lookup(f.Prompt, indexes[:0])
+		if len(indexes) == 0 {
+			return nil, errors.Errorf(
+				"failed to find prompt or field with name/id: %v",
+				f.Prompt,
+			)
+		}
+		for _, i := range indexes {
+			fld := &ar.fields.elems[i]
+			var pr *Prompt
+			for j := range src.Detail {
+				p := &src.Detail[j]
+				if fld.FieldID != p.FieldID {
+					continue
+				}
+				if pr != nil {
+					return nil, errors.Errorf(
+						"ambiguous use of field %v (ID: %d) as search %v prompt value.  Please use the prompt ID or name instead of the field ID or name.",
+						fld.FieldName, fld.FieldID,
+						src.SearchName,
+					)
+				}
+				pr = p
+			}
+			if pr == nil {
+				return nil, errors.Errorf(
+					"No prompt found in search %v with field %v (ID: %v)",
+					src.SearchName,
+					fld.FieldName,
+					fld.FieldID,
+				)
+			}
+			criteria[pr.PromptID] = fmt.Sprint(f.Value)
+		}
+	}
+	return criteria, nil
 }
 
 type sessionBuffer struct {

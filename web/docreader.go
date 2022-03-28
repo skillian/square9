@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 
@@ -20,7 +21,24 @@ func (it *ResultsIterator) Close() error {
 	return <-it.done
 }
 
-func (it *ResultsIterator) ReadFrom(r io.Reader) (int64, error) {
+// Next retrieves the next document from the ResultsIterator and returns
+// io.EOF when the iterator is done.
+func (it *ResultsIterator) Next(ctx context.Context) (*Document, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case doc, ok := <-it.docs:
+		if !ok {
+			return nil, io.EOF
+		}
+		return doc, nil
+	}
+}
+
+type resultsIteratorReaderFrom ResultsIterator
+
+func (rf *resultsIteratorReaderFrom) ReadFrom(r io.Reader) (int64, error) {
+	it := (*ResultsIterator)(rf)
 	rc := &readCounter{r: r}
 	dec := json.NewDecoder(rc)
 	if err := readJSONOpenBrace(dec); err != nil {

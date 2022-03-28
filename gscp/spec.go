@@ -6,13 +6,17 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/web"
+	"github.com/skillian/workers"
 )
 
 var logger = logging.GetLogger("square9")
@@ -140,7 +144,20 @@ func ParseSpec(specString string) (*Spec, error) {
 		sp.Username = s[:i]
 		s = s[i+1:]
 		if i = strings.IndexByte(sp.Username, ':'); i != -1 {
-			sp.Username, sp.Password = sp.Username[:i], sp.Username[i+1:]
+			v, err := url.PathUnescape(sp.Username[:i])
+			if err != nil {
+				return nil, errors.Errorf1From(
+					err, "failed to unescape username: %v",
+					sp.Username[:i],
+				)
+			}
+			v2, err := url.PathUnescape(sp.Username[i+1:])
+			if err != nil {
+				return nil, errors.Errorf0From(
+					err, "failed to unescape password",
+				)
+			}
+			sp.Username, sp.Password = v, v2
 		}
 	}
 	i = strings.IndexByte(s, '/')
@@ -247,6 +264,20 @@ func (sp *Spec) Eq(b *Spec) bool {
 	return true
 }
 
+// Copy copies the spec to a new spec and applies zero or more changes
+func (sp *Spec) Copy(changes ...func(*Spec)) *Spec {
+	sp2 := &Spec{}
+	*sp2 = *sp
+	sp2.Fields = make(map[string]string, len(sp.Fields))
+	for k, v := range sp.Fields {
+		sp2.Fields[k] = v
+	}
+	for _, change := range changes {
+		change(sp2)
+	}
+	return sp2
+}
+
 func (sp *Spec) String() string {
 	return sp.createString(false)
 }
@@ -291,44 +322,65 @@ func (sp *Spec) createString(includePassword bool) string {
 	return sb.String()
 }
 
-func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, allowOverwrite bool) error {
-	ctx = getOrCreateWebClientMapContext(ctx, false)
+type Config struct {
+	IndexOnly           bool
+	AllowOverwrite      bool
+	Unsecure            bool
+	WebSessionPoolLimit int
+}
+
+func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+	if logger.EffectiveLevel() <= logging.VerboseLevel {
+		type specNoString Spec
+		logger.Verbose4(
+			"copying source %v to %v\nsource: %v\ndest: %v",
+			source, dest,
+			spew.Sdump((*specNoString)(source)),
+			spew.Sdump((*specNoString)(dest)),
+		)
+	}
+	ctx, created := getOrCreateWebClientMapContext(ctx, false)
 	localSource, localDest := source.IsLocal(), dest.IsLocal()
+	var sourceClient, destClient web.Client
 	if !localSource {
-		_, _ = getWebClientForSpec(ctx, source)
+		sourceClient, _ = getWebClientForSpec(ctx, source)
 	}
 	if !localDest {
-		_, _ = getWebClientForSpec(ctx, dest)
+		destClient, _ = getWebClientForSpec(ctx, dest)
+	}
+	if created {
+		if sourceClient != nil {
+			defer errors.Catch(&Err, sourceClient.Close)
+		}
+		if destClient != nil && destClient != sourceClient {
+			defer errors.Catch(&Err, destClient.Close)
+		}
 	}
 	switch {
 	case localSource && localDest:
-		return localCopy(ctx, source, dest, allowOverwrite)
+		return localCopy(ctx, source, dest, config)
 	case localSource && !localDest:
-		return localToRemote(ctx, source, dest, allowOverwrite)
+		return localToRemote(ctx, source, dest, config)
 	case !localSource && localDest:
-		return errors.Errorf0(
-			"copying from a remote source to a local " +
-				"destination is not yet supported",
-		)
-		// return remoteToLocal(ctx, source, dest, allowOverwrite)
+		return remoteToLocal(ctx, source, dest, config)
 	}
 	return errors.Errorf0(
 		"copying from a remote source to a remote destination " +
 			"is not yet supported",
 	)
-	// return remoteToRemote(ctx, source, dest, allowOverwrite)
+	// return remoteToRemote(ctx, source, dest, config)
 }
 
 // localCopy copies a local file to another local file.  There's really no
 // reason to use this program to do that, but I figured it'd be a missing
 // edge case if it was just omitted!
-func localCopy(ctx context.Context, source, dest *Spec, allowOverwrite bool) (Err error) {
+func localCopy(ctx context.Context, source, dest *Spec, config Config) (Err error) {
 	sourceFile, err := OpenFilenameRead(source.ArchivePath)
 	if err != nil {
 		return err
 	}
 	defer errors.Catch(&Err, sourceFile.Close)
-	destFile, err := OpenFilenameCreate(dest.ArchivePath, allowOverwrite)
+	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
 	if err != nil {
 		return err
 	}
@@ -342,23 +394,41 @@ func localCopy(ctx context.Context, source, dest *Spec, allowOverwrite bool) (Er
 	return err
 }
 
-func localToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bool) error {
+func localToRemote(ctx context.Context, source, dest *Spec, config Config) error {
 	if !source.Kind.HasAll(IndexSpec) {
-		return singleLocalToRemote(ctx, source, dest, allowOverwrite)
+		return singleLocalToRemote(ctx, source, dest, config)
 	}
-	return localCSVToRemote(ctx, source, dest, allowOverwrite)
+	return localCSVToRemote(ctx, source, dest, config)
 }
 
-func singleLocalToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bool) (Err error) {
+func singleLocalToRemote(ctx context.Context, source, dest *Spec, config Config) (Err error) {
 	sourceFile, err := OpenFilenameRead(source.ArchivePath)
 	if err != nil {
 		return err
 	}
 	defer errors.Catch(&Err, sourceFile.Close)
-	return ReadIntoSpecFrom(ctx, sourceFile, dest, allowOverwrite)
+	return ReadIntoSpecFrom(ctx, sourceFile, dest, config)
 }
 
-func localCSVToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bool) error {
+func localCSVToRemote(ctx context.Context, source, dest *Spec, config Config) error {
+	return localCSVToDest(
+		ctx, source, dest, func(ctx context.Context, fieldNames, fieldValues []string, config Config) (*Spec, error) {
+			return dest.Copy(func(s *Spec) {
+				for i, fieldName := range fieldNames {
+					if _, ok := s.Fields[fieldName]; !ok {
+						s.Fields[fieldName] = fieldValues[i]
+					}
+				}
+			}), nil
+		}, config,
+	)
+}
+
+func localCSVToDest(
+	ctx context.Context, source, dest *Spec,
+	destFactory func(ctx context.Context, fieldNames, fieldValues []string, config Config) (*Spec, error),
+	config Config,
+) error {
 	fieldNames, err := getFieldNamesForSourceSpec(ctx, source, dest)
 	if err != nil {
 		return err
@@ -371,12 +441,37 @@ func localCSVToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bo
 	if err != nil {
 		return err
 	}
+	type req struct {
+		rowSpec     *Spec
+		rowDestSpec *Spec
+	}
+	limit := config.WebSessionPoolLimit
+	if limit < 1 {
+		limit = 1
+	}
+	reqs := make(chan req, limit*3/2)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := workers.Work(ctx, reqs, func(ctx context.Context, req req) (struct{}, error) {
+		logger.Info2("copying %s to %s", req.rowSpec, req.rowDestSpec)
+		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
+		return struct{}{}, err
+	}, workers.WorkerCount(limit))
+	resultsDone := make(chan error)
+	go func() {
+		defer close(resultsDone)
+		for result := range results {
+			if result.Err != nil {
+				cancel()
+				resultsDone <- result.Err
+			}
+		}
+	}()
 	reader := csv.NewReader(sourceFile)
-	reader.ReuseRecord = true
 	for {
 		row, err := reader.Read()
 		if err == io.EOF {
-			return nil
+			break
 		}
 		if err != nil {
 			return errors.Errorf1From(
@@ -401,12 +496,171 @@ func localCSVToRemote(ctx context.Context, source, dest *Spec, allowOverwrite bo
 				row[len(row)-1],
 			)
 		}
-		for i, fieldName := range fieldNames {
-			if _, ok := rowSpec.Fields[fieldName]; !ok {
-				rowSpec.Fields[fieldName] = row[i]
+		rowDestSpec, err := destFactory(ctx, fieldNames, row, config)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			break
+		case reqs <- req{rowSpec, rowDestSpec}:
+		}
+	}
+	close(reqs)
+	errs := make([]error, 0, config.WebSessionPoolLimit)
+	for err := range resultsDone {
+		errs = append(errs, err)
+	}
+	return errors.Aggregate(errs...)
+}
+
+func remoteToLocal(ctx context.Context, source, dest *Spec, config Config) error {
+	if !dest.Kind.HasAll(IndexSpec) {
+		return singleRemoteToLocal(ctx, source, dest, config)
+	}
+	if !config.IndexOnly {
+		return errors.Errorf0(
+			"exporting files and documents is not yet " +
+				"supported.  Please use GlobalSearch " +
+				"Extensions in the mean time",
+		)
+	}
+	return remoteSearchToLocalIndex(ctx, source, dest, config)
+}
+
+func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	if err != nil {
+		return err
+	}
+	defer errors.Catch(&Err, destFile.Close)
+	return WriteSpecTo(ctx, source, destFile)
+}
+
+func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	client, err := getWebClientForSpec(ctx, source)
+	if err != nil {
+		return err
+	}
+	f, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	if err != nil {
+		return err
+	}
+	defer errors.Catch(&Err, f.Close)
+	csvWriter := csv.NewWriter(f)
+	defer errors.Catch(&Err, func() error {
+		csvWriter.Flush()
+		return csvWriter.Error()
+	})
+	var exportDir string
+	if !config.IndexOnly {
+		exportDir = dest.ArchivePath[:len(dest.ArchivePath)-len(filepath.Ext(dest.ArchivePath))]
+		if _, err := os.Stat(exportDir); err != nil {
+			if os.IsNotExist(err) {
+				if err = os.MkdirAll(exportDir, 0750); err != nil {
+					return errors.Errorf1From(
+						err, "failed to create export directory %v",
+						exportDir,
+					)
+				}
+			} else {
+				return errors.Errorf1From(
+					err, "failed to check if export directory %v exists",
+					exportDir,
+				)
 			}
 		}
-		CopyFromSourceToDestSpec(ctx, rowSpec, dest, allowOverwrite)
+	}
+	return client.Session(ctx, func(ctx context.Context, s *web.Session) error {
+		dbar, err := getDBArch(ctx, s, source)
+		if err != nil {
+			return err
+		}
+		flds, err := s.Fields(ctx, dbar.db, dbar.arch, nil)
+		if err != nil {
+			return err
+		}
+		srs, err := s.Searches(ctx, dbar.db, dbar.arch, web.Name(source.Search))
+		if err != nil {
+			return err
+		}
+		crit := make([]web.SearchCriterion, 0, len(source.Fields))
+		logger.Verbose("search prompt values: %#v", source.Fields)
+		for k, v := range source.Fields {
+			crit = append(crit, web.SearchCriterion{
+				Prompt: web.Name(k),
+				Value:  v,
+			})
+		}
+		fieldVals := make([]string, len(flds))
+		return iterateSearchResultsPages(
+			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
+			func(ctx context.Context, doc *web.Document) (Err error) {
+				if !config.IndexOnly {
+					outputFilename := filepath.Join(
+						exportDir,
+						strconv.FormatInt(doc.DocumentID, 10)+doc.FileType,
+					)
+					f, err := OpenFilenameCreate(outputFilename, config.AllowOverwrite)
+					if err != nil {
+						return err
+					}
+					defer errors.Catch(&Err, f.Close)
+					if err := s.Document(ctx, dbar.db, dbar.arch, doc, web.FileOption, f); err != nil {
+						return err
+					}
+				}
+				for i, fld := range flds {
+					foundField := false
+					for _, docVal := range doc.Fields {
+						if docVal.FieldID != fld.FieldID {
+							continue
+						}
+						foundField = true
+						fieldVals[i] = docVal.Value
+						break
+					}
+					if !foundField {
+						fieldVals[i] = ""
+					}
+				}
+				return csvWriter.Write(fieldVals)
+			},
+		)
+	})
+}
+
+func iterateSearchResultsPages(
+	ctx context.Context, s *web.Session, d *web.Database,
+	a *web.Archive, search *web.Search, criteria []web.SearchCriterion,
+	forEach func(context.Context, *web.Document) error,
+	options ...web.RequestOption,
+) error {
+	const recordsPerPage = 1024
+	options = append(
+		options,
+		web.Value("RecordsPerPage", recordsPerPage),
+		nil, // replaced with page=i in the loop below
+	)
+	for i := 1; ; i++ {
+		options = append(options[:len(options)-1], web.Value("page", i))
+		res, err := s.Search(
+			ctx, d, a, search, criteria,
+			options...,
+		)
+		if err != nil {
+			return err
+		}
+		for i := range res.Docs {
+			if err := forEach(ctx, &res.Docs[i]); err != nil {
+				return err
+			}
+		}
+		if len(res.Docs) < recordsPerPage {
+			return nil
+		}
 	}
 }
 
@@ -432,13 +686,14 @@ func webClientMapFromContext(ctx context.Context) (wcm *webClientMap, ok bool) {
 }
 
 func CreateWebClientMapContext(ctx context.Context) context.Context {
-	return getOrCreateWebClientMapContext(ctx, true)
+	ctx, _ = getOrCreateWebClientMapContext(ctx, true)
+	return ctx
 }
 
-func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) context.Context {
+func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) (out context.Context, created bool) {
 	prev, ok := webClientMapFromContext(ctx)
 	if ok && !mustCreate {
-		return ctx
+		return ctx, false
 	}
 	return context.WithValue(
 		ctx,
@@ -447,7 +702,7 @@ func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) contex
 			m:    make(map[webClientKey]web.Client, 2),
 			prev: prev,
 		},
-	)
+	), true
 }
 
 // getWebClientForSpec retrieves a web.Client from the context
@@ -459,7 +714,7 @@ func getWebClientForSpec(ctx context.Context, sp *Spec) (web.Client, error) {
 			"web client map not found in context",
 		)
 	}
-	return wcm.getOrCreate(sp), nil
+	return wcm.getOrCreate(ctx, sp), nil
 }
 
 func (m *webClientMap) add(sp *Spec, wc web.Client) {
@@ -469,7 +724,7 @@ func (m *webClientMap) add(sp *Spec, wc web.Client) {
 	m.mu.Unlock()
 }
 
-func (m *webClientMap) getOrCreate(sp *Spec) web.Client {
+func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec) web.Client {
 	k := createWebClientKeyFromSpec(sp)
 	var root *webClientMap
 	for m := m; m != nil; m = m.prev {
@@ -481,7 +736,7 @@ func (m *webClientMap) getOrCreate(sp *Spec) web.Client {
 			return v
 		}
 	}
-	pool := createWebSessionsFromSpec(sp)
+	pool := createWebSessionsFromSpec(ctx, sp)
 	root.mu.Lock()
 	v, loaded := root.m[k]
 	if loaded {
@@ -501,12 +756,18 @@ func createWebClientKeyFromSpec(sp *Spec) webClientKey {
 	}
 }
 
-func createWebSessionsFromSpec(sp *Spec) *web.SessionPool {
+type WebSessionPoolLimit struct{}
+
+func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
 	scheme := "https"
 	if sp.Kind.HasAll(UnsecureSpec) {
 		scheme = scheme[:4]
 	}
-	return web.NewSessionPool(1, func(ctx context.Context) (*web.Session, error) {
+	limit := 1
+	if v, ok := ctx.Value((*WebSessionPoolLimit)(nil)).(int); ok {
+		limit = v
+	}
+	return web.NewSessionPool(limit, func(ctx context.Context) (*web.Session, error) {
 		return web.NewSession(
 			ctx,
 			web.APIURL(&url.URL{
@@ -522,9 +783,9 @@ func createWebSessionsFromSpec(sp *Spec) *web.SessionPool {
 	})
 }
 
-func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, allowOverwrite bool) error {
+func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config Config) error {
 	if sp.IsLocal() {
-		return readIntoLocalFile(ctx, r, sp.ArchivePath, allowOverwrite)
+		return readIntoLocalFile(ctx, r, sp.ArchivePath, config)
 	}
 	client, err := getWebClientForSpec(ctx, sp)
 	if err != nil {
@@ -535,8 +796,8 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, allowOverwrite
 	})
 }
 
-func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, allowOverwrite bool) (Err error) {
-	f, err := OpenFilenameCreate(filename, allowOverwrite)
+func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config Config) (Err error) {
+	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
 	defer errors.Catch(&Err, f.Close)
 	_, err = io.Copy(f, r)
 	return err

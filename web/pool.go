@@ -92,14 +92,6 @@ func (p *SessionPool) getSession(ctx context.Context) (*Session, error) {
 
 // Session borrows a session from the pool to perform some operation.
 func (p *SessionPool) Session(ctx context.Context, f func(context.Context, *Session) error) error {
-	// defer func() {
-	// 	if v := recover(); v != nil {
-	// 		p.mutex.Lock()
-	// 		p.limit++
-	// 		p.mutex.Unlock()
-	// 		panic(v)
-	// 	}
-	// }()
 	var errs []error
 	for tries := 0; tries < 1; tries++ {
 		s, err := p.getSession(ctx)

@@ -3,26 +3,33 @@ package gscp
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/skillian/expr/errors"
 	"github.com/skillian/interactivity"
 )
 
+type MainConfig struct {
+	FromIndex bool
+	Source    string
+	ToIndex   bool
+	Dest      string
+	Config    Config
+}
+
 // Main is the main entry point for the program after the command line
 // is parsed.
-func Main(
-	ctx context.Context, fromIndex bool, sourceString string,
-	toIndex bool, destString string, allowOverwrite, unsecure bool,
-) error {
+func Main(ctx context.Context, config MainConfig) error {
 	sourceInfo := specInfo{
-		str:      sourceString,
-		index:    fromIndex,
-		unsecure: unsecure,
+		str:      config.Source,
+		index:    config.FromIndex,
+		unsecure: config.Config.Unsecure,
+		isSource: true,
 	}
 	destInfo := specInfo{
-		str:      destString,
-		index:    toIndex,
-		unsecure: unsecure,
+		str:      config.Dest,
+		index:    config.ToIndex,
+		unsecure: config.Config.Unsecure,
 	}
 	ctx, asker := ensureAskerInContext(ctx)
 	source, err := parseSpecInfoAndEnsurePassword(ctx, sourceInfo, "source", asker)
@@ -33,13 +40,14 @@ func Main(
 	if err != nil {
 		return err
 	}
-	return CopyFromSourceToDestSpec(ctx, source, dest, allowOverwrite)
+	return CopyFromSourceToDestSpec(ctx, source, dest, config.Config)
 }
 
 type specInfo struct {
 	str      string
 	index    bool
 	unsecure bool
+	isSource bool
 }
 
 func parseSpecInfo(si specInfo) (*Spec, error) {
@@ -52,6 +60,17 @@ func parseSpecInfo(si specInfo) (*Spec, error) {
 	}
 	if si.unsecure {
 		sp.Kind |= UnsecureSpec
+	}
+	if si.isSource && !sp.IsLocal() {
+		i := strings.LastIndexByte(sp.ArchivePath, '/')
+		if i == -1 {
+			// Global-scope search:
+			sp.Search = sp.ArchivePath
+			sp.ArchivePath = ""
+		} else {
+			sp.Search = sp.ArchivePath[i+1:]
+			sp.ArchivePath = sp.ArchivePath[:i]
+		}
 	}
 	return sp, nil
 }

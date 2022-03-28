@@ -12,12 +12,12 @@ type License struct {
 	Username     string    `json:"Username"`
 	Domain       string    `json:"Domain"`
 	AuthServer   string    `json:"AuthServer"`
-	Type         int       `json:"Type"`
+	Type         int64     `json:"Type"`
 	IPAddress    string    `json:"IPAddress"`
 	DateCreated  time.Time `json:"DateCreated"`
 	DateAccessed time.Time `json:"DateAccessed"`
 	Token        uuid.UUID `json:"Token"`
-	Reg          int       `json:"Reg"`
+	Reg          int64     `json:"Reg"`
 }
 
 // Databases is a useless outer wrapper around the response that comes from
@@ -28,15 +28,15 @@ type Databases struct {
 
 // Database defines a Square 9 database
 type Database struct {
-	DatabaseID   int    `json:"Id"`
+	DatabaseID   int64  `json:"Id"`
 	DatabaseName string `json:"Name"`
 }
 
-// PathSegments is used by Request to know how to insert this object into a URL.
+// PathSegments is used by Request to know how to insert this object int64o a URL.
 func (d *Database) PathSegments() []string {
 	return []string{
 		"dbs",
-		strconv.Itoa(d.DatabaseID),
+		strconv.FormatInt(d.DatabaseID, 10),
 	}
 }
 
@@ -48,11 +48,11 @@ func (d *Database) Name() Name { return Name(d.DatabaseName) }
 
 // Archive in Square 9
 type Archive struct {
-	ArchiveID   int    `json:"Id"`
+	ArchiveID   int64  `json:"Id"`
 	ArchiveName string `json:"Name"`
-	Parent      int    `json:"Parent"`
-	Permissions int    `json:"Permissions"`
-	Properties  int    `json:"Properties"`
+	Parent      int64  `json:"Parent"`
+	Permissions int64  `json:"Permissions"`
+	Properties  int64  `json:"Properties"`
 }
 
 // ID gets an ID of the resource.
@@ -61,11 +61,11 @@ func (a *Archive) ID() ID { return ID(a.ArchiveID) }
 // Name gets the name of the resource.
 func (a *Archive) Name() Name { return Name(a.ArchiveName) }
 
-// PathSegments is used by Request to know how to insert this object into a URL.
+// PathSegments is used by Request to know how to insert this object int64o a URL.
 func (a *Archive) PathSegments() []string {
 	return []string{
 		"archives",
-		strconv.Itoa(a.ArchiveID),
+		strconv.FormatInt(a.ArchiveID, 10),
 	}
 }
 
@@ -78,15 +78,15 @@ type Archives struct {
 // Search in a Database.
 type Search struct {
 	Archives   []Archive
-	SearchID   int    `json:"Id"`
+	SearchID   int64  `json:"Id"`
 	SearchName string `json:"Name"`
-	Parent     int
+	Parent     int64
 	Hash       string
 	Detail     []Prompt
-	Props      int
-	Fuzzy      int
+	Props      int64
+	Fuzzy      int64
 	Grouping   string
-	Settings   int
+	Settings   int64
 }
 
 // ID gets the ID of the search
@@ -95,24 +95,24 @@ func (s *Search) ID() ID { return ID(s.SearchID) }
 // Name gets the name of the search
 func (s *Search) Name() Name { return Name(s.SearchName) }
 
-// PathSegments is used by Request to know how to insert this object into a URL.
+// PathSegments is used by Request to know how to insert this object int64o a URL.
 func (s *Search) PathSegments() []string {
 	return []string{
 		"searches",
-		strconv.Itoa(s.SearchID),
+		strconv.FormatInt(s.SearchID, 10),
 	}
 }
 
 // Prompt is a single prompt in a Search.
 type Prompt struct {
-	PromptID int `json:"ID"`
-	FieldID  int `json:"FID"`
-	ListID   int
-	Parent   int
-	Operator int
+	PromptID int64 `json:"ID"`
+	FieldID  int64 `json:"FID"`
+	ListID   int64
+	Parent   int64
+	Operator int64
 	Prompt   string
 	Value    string `json:"VAL"`
-	Prop     int
+	Prop     int64
 }
 
 // ID gets the ID of the prompt
@@ -125,22 +125,22 @@ func (p *Prompt) Name() Name { return Name(p.Prompt) }
 type Results struct {
 	Fields []FieldDef
 	Docs   []Document
-	Count  int
+	Count  int64
 }
 
 // FieldDef is the definition of an Archive field.
 type FieldDef struct {
-	FieldID   int    `json:"ID"`
+	FieldID   int64  `json:"ID"`
 	FieldName string `json:"Name"`
-	List      int
+	List      int64
 	Type      FieldType
 	Mask      string
-	Size      int
+	Size      int64
 	RegEx     string
 	Prop      FieldProps
-	Parent    int
-	ListF1    int
-	ListF2    int
+	Parent    int64
+	ListF1    int64
+	ListF2    int64
 }
 
 // ID implements IDAndNamer
@@ -152,7 +152,7 @@ func (f *FieldDef) Name() Name { return Name(f.FieldName) }
 //go:generate stringer -type FieldType -linecomment
 
 // FieldType indicates the data type of the field.
-type FieldType int
+type FieldType int64
 
 const (
 	// InvalidFieldType indicates an invalid field type
@@ -161,7 +161,7 @@ const (
 	// CharacterField indicates that the field stores character data
 	CharacterField FieldType = 1 // Character
 
-	// IntegerField indicates that the field stores integer data
+	// IntegerField indicates that the field stores int64eger data
 	IntegerField FieldType = 2 // Integer
 
 	// DateTimeField indicates that the field stores date or date/time
@@ -175,7 +175,7 @@ const (
 //go:generate stringer -type FieldProps -linecomment
 
 // FieldProps is a bit mask describing the properties of fields.
-type FieldProps uint
+type FieldProps uint64
 
 const (
 	// Required indicates that the field is required
@@ -220,23 +220,23 @@ const (
 
 // FieldVal is a field value within a Document.
 type FieldVal struct {
-	FieldID    int           `json:"ID"`
+	FieldID    int64         `json:"ID"`
 	Value      string        `json:"VAL"`
 	MultiValue []interface{} `json:"MVAL"`
 }
 
 // Document as returned by search results
 type Document struct {
-	DocumentID      int `json:"Id"`
+	DocumentID      int64 `json:"Id"`
 	Hash            string
-	TID             int
+	TID             int64
 	Fields          []FieldVal
-	Version         int
-	RootVersionID   int
+	Version         int64
+	RootVersionID   int64
 	Username        string `json:"User_Name"`
-	Hits            int
-	Permissions     uint
-	RevisionOptions int
+	Hits            int64
+	Permissions     uint64
+	RevisionOptions int64
 	FileType        string
 }
 
@@ -251,8 +251,8 @@ const (
 	// EmailOption Returns a ready-to-email version of the document
 	EmailOption DocumentOption = "Email"
 
-	// PrintOption Returns a ready-to-print version of the document
-	PrintOption DocumentOption = "Print"
+	// Print64Option Returns a ready-to-print64 version of the document
+	Print64Option DocumentOption = "Print64"
 
 	// ThumbOption Returns a thumbnail of the document
 	ThumbOption DocumentOption = "Thumb"

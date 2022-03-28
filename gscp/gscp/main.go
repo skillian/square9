@@ -51,6 +51,19 @@ pseudo-URI is a target, then the parameters are field values.
 `,
 		),
 	)
+	var config gscp.MainConfig
+	parser.MustAddArgument(
+		argparse.OptionStrings("--web-session-pool-limit"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Type(argparse.Int),
+		argparse.Help(
+			"specify a session limit for the web session "+
+				"pool.  By default, only one session "+
+				"is used at a time, but specifying "+
+				"this option allows multiple requests "+
+				"to execute concurrently",
+		),
+	).MustBind(&config.Config.WebSessionPoolLimit)
 	var consoleLogLevel string
 	parser.MustAddArgument(
 		argparse.OptionStrings("--log-console"),
@@ -60,7 +73,6 @@ pseudo-URI is a target, then the parameters are field values.
 				"given level",
 		),
 	).MustBind(&consoleLogLevel)
-	var fromIndex bool
 	parser.MustAddArgument(
 		argparse.OptionStrings("--from-index"),
 		argparse.ActionFunc(argparse.StoreTrue),
@@ -68,8 +80,7 @@ pseudo-URI is a target, then the parameters are field values.
 			"source specification is an index; not an individual "+
 				"file",
 		),
-	).MustBind(&fromIndex)
-	var toIndex bool
+	).MustBind(&config.FromIndex)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--to-index"),
 		argparse.ActionFunc(argparse.StoreTrue),
@@ -77,16 +88,23 @@ pseudo-URI is a target, then the parameters are field values.
 			"destination specification is an index; not an "+
 				"individual file",
 		),
-	).MustBind(&toIndex)
-	var allowOverwrite bool
+	).MustBind(&config.ToIndex)
+	parser.MustAddArgument(
+		argparse.OptionStrings("--index-only"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"can only be used with --to-index.  Outputs "+
+				"the index without exporting the "+
+				"actual documents.",
+		),
+	).MustBind(&config.Config.IndexOnly)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--overwrite"),
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
 			"allow existing destination files to be overwritten",
 		),
-	).MustBind(&allowOverwrite)
-	var unsecure bool
+	).MustBind(&config.Config.AllowOverwrite)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--unsecure"),
 		argparse.ActionFunc(argparse.StoreTrue),
@@ -94,21 +112,19 @@ pseudo-URI is a target, then the parameters are field values.
 			"use HTTP instead of HTTPS.  This is almost "+
 				"certainly a very bad idea.",
 		),
-	).MustBind(&unsecure)
-	var sourceSpec string
+	).MustBind(&config.Config.Unsecure)
 	parser.MustAddArgument(
 		argparse.Dest("source"),
 		argparse.MetaVar("SOURCE"),
 		argparse.Nargs(1),
 		argparse.Help("source specification"),
-	).MustBind(&sourceSpec)
-	var destSpec string
+	).MustBind(&config.Source)
 	parser.MustAddArgument(
 		argparse.Dest("destination"),
 		argparse.MetaVar("DEST"),
 		argparse.Nargs(1),
 		argparse.Help("destination specification"),
-	).MustBind(&destSpec)
+	).MustBind(&config.Dest)
 	parser.MustParseArgs()
 	handleErr := func(err error) {
 		if err != nil {
@@ -120,10 +136,11 @@ pseudo-URI is a target, then the parameters are field values.
 	defer cancel()
 	{
 		sigs := make(chan os.Signal)
-		signal.Notify(sigs, os.Kill)
+		signal.Notify(sigs, os.Interrupt)
 		go func() {
 			<-sigs
 			signal.Stop(sigs)
+			cancel()
 			w := os.Stderr
 			if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
 				logger.LogErr(
@@ -135,7 +152,6 @@ pseudo-URI is a target, then the parameters are field values.
 					),
 				)
 			}
-			os.Exit(1)
 		}()
 	}
 	if consoleLogLevel != "" {
@@ -154,10 +170,11 @@ pseudo-URI is a target, then the parameters are field values.
 			logger.SetLevel(lvl)
 		}
 	}
-	if err := gscp.Main(
-		ctx, fromIndex, sourceSpec, toIndex, destSpec,
-		allowOverwrite, unsecure,
-	); err != nil {
+	if config.Config.WebSessionPoolLimit != 0 {
+		// TODO: Get rid of this.
+		ctx = context.WithValue(ctx, (*gscp.WebSessionPoolLimit)(nil), config.Config.WebSessionPoolLimit)
+	}
+	if err := gscp.Main(ctx, config); err != nil {
 		handleErr(err)
 	}
 }

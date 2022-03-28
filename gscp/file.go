@@ -22,11 +22,11 @@ func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 }
 
 // OpenFilenameCreate calls os.Create but first checks
-func OpenFilenameCreate(filename string, overwrite bool) (wc io.WriteCloser, err error) {
+func OpenFilenameCreate(filename string, overwrite bool) (f *os.File, err error) {
 	if overwrite {
-		wc, err = os.Create(filename)
+		f, err = os.Create(filename)
 	} else {
-		wc, err = os.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+		f, err = os.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
 	}
 	if err != nil {
 		return nil, errors.Errorf1From(
@@ -35,6 +35,24 @@ func OpenFilenameCreate(filename string, overwrite bool) (wc io.WriteCloser, err
 		)
 	}
 	return
+}
+
+func createDirIfNotExist(path string) error {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		if err = os.MkdirAll(path, 0750); err != nil {
+			return errors.Errorf1From(
+				err, "failed to create directory: %v",
+				path,
+			)
+		}
+	} else if err != nil {
+		return errors.Errorf1From(
+			err, "failed to check if directory %v exists",
+			path,
+		)
+	}
+	return nil
 }
 
 type fileNopCloserWriterTo struct {

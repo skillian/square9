@@ -43,12 +43,16 @@ func TestMain(t *testing.T) {
 		t.Run(tc.source+"_to_"+tc.dest, func(t *testing.T) {
 			if err := gscp.Main(
 				context.Background(),
-				tc.fromIndex,
-				tc.source,
-				tc.toIndex,
-				tc.dest,
-				tc.allowOverwrite,
-				tc.unsecure,
+				gscp.MainConfig{
+					FromIndex: tc.fromIndex,
+					Source:    tc.source,
+					ToIndex:   tc.toIndex,
+					Dest:      tc.dest,
+					Config: gscp.Config{
+						AllowOverwrite: tc.allowOverwrite,
+						Unsecure:       tc.unsecure,
+					},
+				},
 			); err != nil {
 				t.Fatal(err)
 			}

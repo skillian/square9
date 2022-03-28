@@ -143,6 +143,20 @@ var parseSpecTests = []parseSpecTest{
 			},
 		},
 	},
+	{
+		spec: "gscp://ssAdministrator:globalsearch@192.168.0.242:BrewHaven/Accounts Payable/Purchase Orders/Browse Purchase Orders?PO+Number=08312008",
+		expect: gscp.Spec{
+			Username:    "ssAdministrator",
+			Password:    "globalsearch",
+			Hostname:    "192.168.0.242",
+			APIPath:     "square9api/api",
+			Database:    "BrewHaven",
+			ArchivePath: "Accounts Payable/Purchase Orders/Browse Purchase Orders",
+			Fields: map[string]string{
+				"PO Number": "08312008",
+			},
+		},
+	},
 	// negative cases:
 	{
 		spec: "gscp://hostname/archive",
