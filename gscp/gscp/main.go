@@ -20,7 +20,9 @@ var (
 func main() {
 	parser := argparse.MustNewArgumentParser(
 		argparse.Description(
-			"Interact with Square 9's APIs",
+			"Upload files into GlobalSearch archives as "+
+				"documents or download search results "+
+				"as files.",
 		),
 		argparse.Epilog(
 			`A specification can be one of the following:
@@ -86,7 +88,7 @@ pseudo-URI is a target, then the parameters are field values.
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
 			"destination specification is an index; not an "+
-				"individual file",
+				"individual file.",
 		),
 	).MustBind(&config.ToIndex)
 	parser.MustAddArgument(
@@ -102,7 +104,16 @@ pseudo-URI is a target, then the parameters are field values.
 		argparse.OptionStrings("--overwrite"),
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
-			"allow existing destination files to be overwritten",
+			"allow existing destination files to be "+
+				"overwritten.  If the destination "+
+				"is remote, then --to-index must "+
+				"also be specified and the "+
+				"destination must refer to a search. "+
+				"This search's prompts are populated "+
+				"with fields from the source and if a "+
+				"single existing destination document "+
+				"is found, it is deleted before the "+
+				"source is imported",
 		),
 	).MustBind(&config.Config.AllowOverwrite)
 	parser.MustAddArgument(
@@ -138,9 +149,9 @@ pseudo-URI is a target, then the parameters are field values.
 		sigs := make(chan os.Signal)
 		signal.Notify(sigs, os.Interrupt)
 		go func() {
+			defer cancel()
 			<-sigs
 			signal.Stop(sigs)
-			cancel()
 			w := os.Stderr
 			if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
 				logger.LogErr(

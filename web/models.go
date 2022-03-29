@@ -109,7 +109,7 @@ type Prompt struct {
 	FieldID  int64 `json:"FID"`
 	ListID   int64
 	Parent   int64
-	Operator int64
+	Operator Operator
 	Prompt   string
 	Value    string `json:"VAL"`
 	Prop     int64
@@ -120,6 +120,13 @@ func (p *Prompt) ID() ID { return ID(p.PromptID) }
 
 // Name gets the string prompt used in the search
 func (p *Prompt) Name() Name { return Name(p.Prompt) }
+
+type Operator int64
+
+const (
+	UnknownOperator Operator = iota
+	Equals
+)
 
 // Results are returned by searches
 type Results struct {
@@ -238,6 +245,13 @@ type Document struct {
 	Permissions     uint64
 	RevisionOptions int64
 	FileType        string
+}
+
+func (d *Document) PathSegments() []string {
+	return []string{
+		"documents",
+		strconv.FormatInt(d.DocumentID, 10),
+	}
 }
 
 // DocumentOption is included in the call to Client.Document to specify the

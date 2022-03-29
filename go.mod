@@ -3,10 +3,9 @@ module github.com/skillian/square9
 go 1.18
 
 replace github.com/skillian/argparse => ../argparse
-
 replace github.com/skillian/interactivity => ../interactivity
-
 replace github.com/skillian/logging => ../logging
+replace github.com/skillian/workers => ../workers
 
 require (
 	github.com/davecgh/go-spew v1.1.1

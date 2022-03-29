@@ -188,6 +188,19 @@ func (s *Session) Archives(ctx context.Context, d *Database, f IDAndNamerFilter)
 	return
 }
 
+// DeleteDocument deletes a document.
+func (s *Session) DeleteDocument(ctx context.Context, d *Database, a *Archive, doc *Document) error {
+	err := s.request(
+		ctx, Path(d, a, doc, "delete"), SecureID(doc.Hash),
+	)
+	if err != nil {
+		return errors.ErrorfWithCause(
+			err, "failed to delete document %v", doc,
+		)
+	}
+	return nil
+}
+
 // Document retrieves document data associated with the given document.  This
 // document must have been returned from a previous call to Search with the
 // same session or else it will fail.
@@ -317,22 +330,8 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 }
 
 // Search executes a search
-func (s *Session) Search(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, options ...RequestOption) (rs Results, err error) {
-	err = s.executeSearch(ctx, d, a, sr, fs, JSONTo(&rs), options...)
-	return
-}
-
-func (s *Session) SearchResultsIterator(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, options ...RequestOption) *ResultsIterator {
-	ctx, cancel := context.WithCancel(ctx)
-	it := &ResultsIterator{
-		cancel: cancel,
-		done:   make(chan error),
-		docs:   make(chan *Document),
-	}
-	go func() {
-		it.done <- s.executeSearch(ctx, d, a, sr, fs, (*resultsIteratorReaderFrom)(it))
-	}()
-	return it
+func (s *Session) Search(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, rs *Results, options ...RequestOption) error {
+	return s.executeSearch(ctx, d, a, sr, fs, JSONTo(rs), options...)
 }
 
 func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr *Search, fs []SearchCriterion, r io.ReaderFrom, options ...RequestOption) error {

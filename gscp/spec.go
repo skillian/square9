@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/web"
@@ -323,22 +322,27 @@ func (sp *Spec) createString(includePassword bool) string {
 }
 
 type Config struct {
-	IndexOnly           bool
-	AllowOverwrite      bool
-	Unsecure            bool
+	// IndexOnly will not export documents when the destination is
+	// an index file; it will only export the CSV.
+	IndexOnly bool
+
+	// AllowOverwrite allows the destination to be overwritten
+	// if it already exists.
+	AllowOverwrite bool
+
+	// Unsecure will use HTTP instead of HTTPS.  Its purpose is
+	// just for temporary development environments that don't have
+	// SSL configured.  Do not use this for test or production
+	// systems.
+	Unsecure bool
+
+	// WebSessionPoolLimit defines the number of sessions to limit
+	// the pool to.
 	WebSessionPoolLimit int
 }
 
-func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config Config) (Err error) {
-	if logger.EffectiveLevel() <= logging.VerboseLevel {
-		type specNoString Spec
-		logger.Verbose4(
-			"copying source %v to %v\nsource: %v\ndest: %v",
-			source, dest,
-			spew.Sdump((*specNoString)(source)),
-			spew.Sdump((*specNoString)(dest)),
-		)
-	}
+func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
+	logger.Info2("copying source %v to %v...", source, dest)
 	ctx, created := getOrCreateWebClientMapContext(ctx, false)
 	localSource, localDest := source.IsLocal(), dest.IsLocal()
 	var sourceClient, destClient web.Client
@@ -374,7 +378,7 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config Co
 // localCopy copies a local file to another local file.  There's really no
 // reason to use this program to do that, but I figured it'd be a missing
 // edge case if it was just omitted!
-func localCopy(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+func localCopy(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	sourceFile, err := OpenFilenameRead(source.ArchivePath)
 	if err != nil {
 		return err
@@ -394,14 +398,14 @@ func localCopy(ctx context.Context, source, dest *Spec, config Config) (Err erro
 	return err
 }
 
-func localToRemote(ctx context.Context, source, dest *Spec, config Config) error {
+func localToRemote(ctx context.Context, source, dest *Spec, config *Config) error {
 	if !source.Kind.HasAll(IndexSpec) {
 		return singleLocalToRemote(ctx, source, dest, config)
 	}
 	return localCSVToRemote(ctx, source, dest, config)
 }
 
-func singleLocalToRemote(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+func singleLocalToRemote(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	sourceFile, err := OpenFilenameRead(source.ArchivePath)
 	if err != nil {
 		return err
@@ -410,9 +414,9 @@ func singleLocalToRemote(ctx context.Context, source, dest *Spec, config Config)
 	return ReadIntoSpecFrom(ctx, sourceFile, dest, config)
 }
 
-func localCSVToRemote(ctx context.Context, source, dest *Spec, config Config) error {
+func localCSVToRemote(ctx context.Context, source, dest *Spec, config *Config) error {
 	return localCSVToDest(
-		ctx, source, dest, func(ctx context.Context, fieldNames, fieldValues []string, config Config) (*Spec, error) {
+		ctx, source, dest, func(ctx context.Context, dest *Spec, fieldNames, fieldValues []string, config *Config) (*Spec, error) {
 			return dest.Copy(func(s *Spec) {
 				for i, fieldName := range fieldNames {
 					if _, ok := s.Fields[fieldName]; !ok {
@@ -426,8 +430,12 @@ func localCSVToRemote(ctx context.Context, source, dest *Spec, config Config) er
 
 func localCSVToDest(
 	ctx context.Context, source, dest *Spec,
-	destFactory func(ctx context.Context, fieldNames, fieldValues []string, config Config) (*Spec, error),
-	config Config,
+	destFactory func(
+		ctx context.Context, dest *Spec,
+		fieldNames, fieldValues []string,
+		config *Config,
+	) (*Spec, error),
+	config *Config,
 ) error {
 	fieldNames, err := getFieldNamesForSourceSpec(ctx, source, dest)
 	if err != nil {
@@ -453,21 +461,25 @@ func localCSVToDest(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := workers.Work(ctx, reqs, func(ctx context.Context, req req) (struct{}, error) {
-		logger.Info2("copying %s to %s", req.rowSpec, req.rowDestSpec)
 		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
 		return struct{}{}, err
 	}, workers.WorkerCount(limit))
-	resultsDone := make(chan error)
+	errs := make([]error, 0, config.WebSessionPoolLimit)
+	resultsDone := make(chan struct{})
 	go func() {
 		defer close(resultsDone)
+		logger.Verbose0("starting results reader...")
+		defer logger.Verbose0("Results reader stopped.")
 		for result := range results {
 			if result.Err != nil {
+				logger.LogErr(result.Err)
+				errs = append(errs, result.Err)
 				cancel()
-				resultsDone <- result.Err
 			}
 		}
 	}()
 	reader := csv.NewReader(sourceFile)
+rowLoop:
 	for {
 		row, err := reader.Read()
 		if err == io.EOF {
@@ -496,25 +508,22 @@ func localCSVToDest(
 				row[len(row)-1],
 			)
 		}
-		rowDestSpec, err := destFactory(ctx, fieldNames, row, config)
+		rowDestSpec, err := destFactory(ctx, dest, fieldNames, row, config)
 		if err != nil {
 			return err
 		}
 		select {
 		case <-ctx.Done():
-			break
+			break rowLoop
 		case reqs <- req{rowSpec, rowDestSpec}:
 		}
 	}
 	close(reqs)
-	errs := make([]error, 0, config.WebSessionPoolLimit)
-	for err := range resultsDone {
-		errs = append(errs, err)
-	}
+	<-resultsDone
 	return errors.Aggregate(errs...)
 }
 
-func remoteToLocal(ctx context.Context, source, dest *Spec, config Config) error {
+func remoteToLocal(ctx context.Context, source, dest *Spec, config *Config) error {
 	if !dest.Kind.HasAll(IndexSpec) {
 		return singleRemoteToLocal(ctx, source, dest, config)
 	}
@@ -528,7 +537,7 @@ func remoteToLocal(ctx context.Context, source, dest *Spec, config Config) error
 	return remoteSearchToLocalIndex(ctx, source, dest, config)
 }
 
-func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
 	if err != nil {
 		return err
@@ -537,7 +546,7 @@ func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config Config)
 	return WriteSpecTo(ctx, source, destFile)
 }
 
-func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config Config) (Err error) {
+func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	client, err := getWebClientForSpec(ctx, source)
@@ -644,10 +653,13 @@ func iterateSearchResultsPages(
 		web.Value("RecordsPerPage", recordsPerPage),
 		nil, // replaced with page=i in the loop below
 	)
+	var res web.Results
 	for i := 1; ; i++ {
+		res.Fields = res.Fields[:0]
+		res.Docs = res.Docs[:0]
 		options = append(options[:len(options)-1], web.Value("page", i))
-		res, err := s.Search(
-			ctx, d, a, search, criteria,
+		err := s.Search(
+			ctx, d, a, search, criteria, &res,
 			options...,
 		)
 		if err != nil {
@@ -783,7 +795,7 @@ func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
 	})
 }
 
-func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config Config) error {
+func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config) error {
 	if sp.IsLocal() {
 		return readIntoLocalFile(ctx, r, sp.ArchivePath, config)
 	}
@@ -792,18 +804,18 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config Config)
 		return err
 	}
 	return client.Session(ctx, func(ctx context.Context, s *web.Session) error {
-		return readIntoDocument(ctx, s, r, sp)
+		return readIntoDocument(ctx, s, r, sp, config)
 	})
 }
 
-func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config Config) (Err error) {
+func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config *Config) (Err error) {
 	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
 	defer errors.Catch(&Err, f.Close)
 	_, err = io.Copy(f, r)
 	return err
 }
 
-func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec) error {
+func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec, config *Config) error {
 	dbar, err := getDBArch(ctx, s, sp)
 	if err != nil {
 		return err
@@ -815,17 +827,78 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 			Value: v,
 		})
 	}
-	wt, ok := r.(io.WriterTo)
-	if !ok {
-		if f, ok := r.(*os.File); ok {
-			wt = fileNopCloserWriterTo{f}
-		} else {
-			wt = writerToFunc(func(w io.Writer) (int64, error) {
-				return io.Copy(w, r)
-			})
+	if config.AllowOverwrite {
+		if !sp.Kind.HasAll(IndexSpec) || sp.Search == "" {
+			return errors.Errorf1(
+				"remote destination specification %v "+
+					"must be to an index and must "+
+					"have a Search when used in "+
+					"conjunction with overwrite.",
+				sp,
+			)
+		}
+		if err = deleteExistingDocuments(ctx, s, sp, dbar, config); err != nil {
+			return err
 		}
 	}
+	wt := createWriterToFromReader(r)
 	return s.Import(ctx, dbar.db, dbar.arch, flds, wt)
+}
+
+// deleteExistingDocuments deletes any documents matching the sp
+// specification.  sp must have its Search field filled in and that
+// search's prompts are filled in with sp's Fields and if only one
+// document is returned that matches, it is deleted.
+func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar dbArch, config *Config) error {
+	if sp.Search == "" {
+		return errors.Errorf0(
+			"cannot delete documents without a search.",
+		)
+	}
+	srs, err := s.Searches(ctx, dbar.db, dbar.arch, web.Name(sp.Search))
+	if err != nil {
+		return err
+	}
+	flds, err := s.Fields(ctx, dbar.db, dbar.arch, nil)
+	if err != nil {
+		return err
+	}
+	crit := make([]web.SearchCriterion, 0, len(srs[0].Detail))
+	for _, fld := range flds {
+		fv, ok := sp.Fields[fld.FieldName]
+		if !ok {
+			continue
+		}
+		for _, pr := range srs[0].Detail {
+			if pr.FieldID != fld.FieldID {
+				continue
+			}
+			if pr.Operator != web.Equals {
+				continue
+			}
+			crit = append(crit, web.SearchCriterion{
+				Prompt: pr.ID(),
+				Value:  fv,
+			})
+			break
+		}
+	}
+	var res web.Results
+	if err := s.Search(ctx, dbar.db, dbar.arch, &srs[0], crit, &res); err != nil {
+		return err
+	}
+	if len(res.Docs) > 1 {
+		return errors.Errorf2(
+			"found %d documents when attempting to "+
+				"replace %v.  Nothing was replaced.",
+			len(res.Docs), sp,
+		)
+	}
+	if len(res.Docs) == 1 {
+		logger.Info1("deleting existing document %v...", &res.Docs[0])
+		return s.DeleteDocument(ctx, dbar.db, dbar.arch, &res.Docs[0])
+	}
+	return nil
 }
 
 func WriteSpecTo(ctx context.Context, sp *Spec, w io.Writer) error {
@@ -876,19 +949,15 @@ func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer)
 			Value:  v,
 		})
 	}
-	res, err := s.Search(ctx, dbar.db, dbar.arch, &srs[0], criteria)
+	var res web.Results
+	err = s.Search(ctx, dbar.db, dbar.arch, &srs[0], criteria, &res)
 	if err != nil {
 		return err
 	}
 	if len(res.Docs) == 0 {
 		return errors.Errorf0("no documents found")
 	}
-	rf, ok := w.(io.ReaderFrom)
-	if !ok {
-		rf = readerFromFunc(func(r io.Reader) (int64, error) {
-			return io.Copy(w, r)
-		})
-	}
+	rf := createReaderFromFromWriter(w)
 	return s.Document(
 		ctx, dbar.db, dbar.arch, &res.Docs[0], web.FileOption,
 		rf,

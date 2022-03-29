@@ -24,7 +24,6 @@ func Main(ctx context.Context, config MainConfig) error {
 		str:      config.Source,
 		index:    config.FromIndex,
 		unsecure: config.Config.Unsecure,
-		isSource: true,
 	}
 	destInfo := specInfo{
 		str:      config.Dest,
@@ -40,14 +39,19 @@ func Main(ctx context.Context, config MainConfig) error {
 	if err != nil {
 		return err
 	}
-	return CopyFromSourceToDestSpec(ctx, source, dest, config.Config)
+	if config.Config.AllowOverwrite && !dest.Kind.HasAll(IndexSpec) {
+		return errors.Errorf(
+			"destination specification must be an index " +
+				"when used with overwrite.",
+		)
+	}
+	return CopyFromSourceToDestSpec(ctx, source, dest, &config.Config)
 }
 
 type specInfo struct {
 	str      string
 	index    bool
 	unsecure bool
-	isSource bool
 }
 
 func parseSpecInfo(si specInfo) (*Spec, error) {
@@ -61,7 +65,7 @@ func parseSpecInfo(si specInfo) (*Spec, error) {
 	if si.unsecure {
 		sp.Kind |= UnsecureSpec
 	}
-	if si.isSource && !sp.IsLocal() {
+	if !sp.IsLocal() && sp.Kind.HasAll(IndexSpec) {
 		i := strings.LastIndexByte(sp.ArchivePath, '/')
 		if i == -1 {
 			// Global-scope search:

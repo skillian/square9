@@ -54,7 +54,7 @@ func (f Name) Filter(ian IDAndNamer) bool {
 }
 
 // ID of a Square 9 metadata object
-type ID int
+type ID int64
 
 // Filter implements the IDAndNamerFilter interface.
 func (f ID) Filter(ian IDAndNamer) bool {

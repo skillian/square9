@@ -65,10 +65,31 @@ func (fwt fileNopCloserWriterTo) WriteTo(w io.Writer) (int64, error) {
 
 func (fwt fileNopCloserWriterTo) Close() error { return nil }
 
+func createReaderFromFromWriter(w io.Writer) io.ReaderFrom {
+	if rf, ok := w.(io.ReaderFrom); ok {
+		return rf
+	}
+	return readerFromFunc(func(r io.Reader) (int64, error) {
+		return io.Copy(w, r)
+	})
+}
+
 type readerFromFunc func(r io.Reader) (int64, error)
 
 func (rf readerFromFunc) ReadFrom(r io.Reader) (int64, error) {
 	return rf(r)
+}
+
+func createWriterToFromReader(r io.Reader) io.WriterTo {
+	if wt, ok := r.(io.WriterTo); ok {
+		return wt
+	}
+	if f, ok := r.(*os.File); ok {
+		return fileNopCloserWriterTo{f}
+	}
+	return writerToFunc(func(w io.Writer) (int64, error) {
+		return io.Copy(w, r)
+	})
 }
 
 type writerToFunc func(w io.Writer) (int64, error)
