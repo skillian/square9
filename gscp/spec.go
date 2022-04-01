@@ -842,7 +842,12 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 		}
 	}
 	wt := createWriterToFromReader(r)
-	return s.Import(ctx, dbar.db, dbar.arch, flds, wt)
+	if err := s.Import(ctx, dbar.db, dbar.arch, flds, wt); err != nil {
+		return errors.Errorf1From(
+			err, "failed to import %v", sp,
+		)
+	}
+	return nil
 }
 
 // deleteExistingDocuments deletes any documents matching the sp

@@ -70,7 +70,16 @@ func createReaderFromFromWriter(w io.Writer) io.ReaderFrom {
 		return rf
 	}
 	return readerFromFunc(func(r io.Reader) (int64, error) {
-		return io.Copy(w, r)
+		n, err := io.Copy(w, r)
+		if err != nil {
+			err = errors.Errorf2From(
+				err, "error while copying %[1]v "+
+					"(type: %[1]T) to %[2]v "+
+					"(type: %[2]T)",
+				r, w,
+			)
+		}
+		return n, err
 	})
 }
 
@@ -88,7 +97,16 @@ func createWriterToFromReader(r io.Reader) io.WriterTo {
 		return fileNopCloserWriterTo{f}
 	}
 	return writerToFunc(func(w io.Writer) (int64, error) {
-		return io.Copy(w, r)
+		n, err := io.Copy(w, r)
+		if err != nil {
+			err = errors.Errorf2From(
+				err, "error while copying %[1]v "+
+					"(type: %[1]T) to %[2]v "+
+					"(type: %[2]T)",
+				r, w,
+			)
+		}
+		return n, err
 	})
 }
 

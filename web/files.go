@@ -37,11 +37,19 @@ func (cf *cachedFile) Read(data []byte) (n int, err error) {
 	return cf.r.Read(data)
 }
 
-func (cf *cachedFile) WriteTo(w io.Writer) (int64, error) {
+func (cf *cachedFile) WriteTo(w io.Writer) (n int64, err error) {
 	if cf.r == cf.buf {
-		return cf.buf.WriteTo(w)
+		n, err = cf.buf.WriteTo(w)
+	} else {
+		n, err = io.Copy(w, cf.r)
 	}
-	return io.Copy(w, cf.r)
+	if err != nil {
+		err = errors.ErrorfWithCause(
+			err, "error writing cached file %v to %v",
+			cf, w,
+		)
+	}
+	return
 }
 
 func (cf *cachedFile) Write(data []byte) (n int, err error) {
@@ -78,13 +86,20 @@ func (cf *cachedFile) Write(data []byte) (n int, err error) {
 				0,
 			)
 		}
-		cf.r, cf.w = cf.file, cf.file
+		cf.r, cf.w = &cf.file, &cf.file
 		cf.buf.Reset()
 		buffers.Put(cf.buf)
 		cf.buf = nil
 		cf.file.f = f
 	}
-	return cf.w.Write(data)
+	if n, err = cf.w.Write(data); err != nil {
+		err = errors.ErrorfWithCause(
+			err, "error while writing from "+
+				"%[1]v (type: %[1]T)",
+			cf.w,
+		)
+	}
+	return
 }
 
 func (cf *cachedFile) Close() error {
@@ -121,7 +136,7 @@ func (cf *cachedFile) Reset() error {
 		return nil
 	}
 	if cf.file.f != nil {
-		cf.r, cf.w = cf.file, cf.file
+		cf.r, cf.w = &cf.file, &cf.file
 		if _, err := cf.file.f.Seek(0, os.SEEK_SET); err != nil {
 			return errors.ErrorfWithCause(
 				err, "failed to seek to beginning of cached "+
@@ -220,23 +235,36 @@ type bufferFile struct {
 	f *os.File
 }
 
-func (bf bufferFile) Read(data []byte) (n int, err error) {
+func (bf *bufferFile) Read(data []byte) (n int, err error) {
 	return bf.f.Read(data)
 }
 
-func (bf bufferFile) Write(data []byte) (n int, err error) {
+func (bf *bufferFile) Write(data []byte) (n int, err error) {
 	var readPos int64
 	readPos, err = bf.f.Seek(0, os.SEEK_CUR)
 	if err != nil {
+		err = errors.ErrorfWithCause(
+			err, "failed to determine current buffer file offset",
+		)
 		return
 	}
 	if _, err = bf.f.Seek(0, os.SEEK_END); err != nil {
+		err = errors.ErrorfWithCause(
+			err, "failed to seek to end of buffer file for new write",
+		)
 		return
 	}
 	if n, err = bf.f.Write(data); err != nil {
+		err = errors.ErrorfWithCause(
+			err, "failed to write to end of buffer file",
+		)
 		return
 	}
-	_, err = bf.f.Seek(readPos, os.SEEK_SET)
+	if _, err = bf.f.Seek(readPos, os.SEEK_SET); err != nil {
+		err = errors.ErrorfWithCause(
+			err, "failed to restore file offset to read offset",
+		)
+	}
 	return
 }
 
