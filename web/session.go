@@ -522,7 +522,7 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 	archiveWg := sync.WaitGroup{}
 	archiveWg.Add(len(model.Archives))
 	const arbitraryConcurrencyLimit = 4
-	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, a *Archive) (models Archives, err error) {
+	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, _ int, a *Archive) (models Archives, err error) {
 		var model Archives
 		defer archiveWg.Done()
 		if err = s.request(

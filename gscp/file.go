@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/skillian/expr/errors"
 )
@@ -138,4 +139,15 @@ func (r contextReader) Read(b []byte) (n int, err error) {
 		return 0, err
 	}
 	return r.r.Read(b)
+}
+
+const badWindowsFilenameChars = "<>:\"/\\|?*"
+
+func cleanFilename(name string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune(badWindowsFilenameChars, r) {
+			return '_'
+		}
+		return r
+	}, name)
 }

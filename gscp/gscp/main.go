@@ -69,6 +69,7 @@ pseudo-URI is a target, then the parameters are field values.
 	var consoleLogLevel string
 	parser.MustAddArgument(
 		argparse.OptionStrings("--log-console"),
+		argparse.MetaVar("LOG_LEVEL"),
 		argparse.ActionFunc(argparse.Store),
 		argparse.Help(
 			"enable logging for the console at the "+

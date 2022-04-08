@@ -15,7 +15,6 @@ import (
 	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/web"
-	"github.com/skillian/workers"
 )
 
 var logger = logging.GetLogger("square9")
@@ -402,7 +401,7 @@ func localToRemote(ctx context.Context, source, dest *Spec, config *Config) erro
 	if !source.Kind.HasAll(IndexSpec) {
 		return singleLocalToRemote(ctx, source, dest, config)
 	}
-	return localCSVToRemote(ctx, source, dest, config)
+	return localCSVToDest2(ctx, source, dest, config)
 }
 
 func singleLocalToRemote(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
@@ -412,115 +411,6 @@ func singleLocalToRemote(ctx context.Context, source, dest *Spec, config *Config
 	}
 	defer errors.Catch(&Err, sourceFile.Close)
 	return ReadIntoSpecFrom(ctx, sourceFile, dest, config)
-}
-
-func localCSVToRemote(ctx context.Context, source, dest *Spec, config *Config) error {
-	return localCSVToDest(
-		ctx, source, dest, func(ctx context.Context, dest *Spec, fieldNames, fieldValues []string, config *Config) (*Spec, error) {
-			return dest.Copy(func(s *Spec) {
-				for i, fieldName := range fieldNames {
-					if _, ok := s.Fields[fieldName]; !ok {
-						s.Fields[fieldName] = fieldValues[i]
-					}
-				}
-			}), nil
-		}, config,
-	)
-}
-
-func localCSVToDest(
-	ctx context.Context, source, dest *Spec,
-	destFactory func(
-		ctx context.Context, dest *Spec,
-		fieldNames, fieldValues []string,
-		config *Config,
-	) (*Spec, error),
-	config *Config,
-) error {
-	fieldNames, err := getFieldNamesForSourceSpec(ctx, source, dest)
-	if err != nil {
-		return err
-	}
-	if logger.EffectiveLevel() <= logging.VerboseLevel {
-		names := strings.Join(fieldNames, ", ")
-		logger.Verbose1("field names: %s", names)
-	}
-	sourceFile, err := OpenFilenameRead(source.ArchivePath)
-	if err != nil {
-		return err
-	}
-	type req struct {
-		rowSpec     *Spec
-		rowDestSpec *Spec
-	}
-	limit := config.WebSessionPoolLimit
-	if limit < 1 {
-		limit = 1
-	}
-	reqs := make(chan req, limit*3/2)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	results := workers.Work(ctx, reqs, func(ctx context.Context, req req) (struct{}, error) {
-		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
-		return struct{}{}, err
-	}, workers.WorkerCount(limit))
-	errs := make([]error, 0, config.WebSessionPoolLimit)
-	resultsDone := make(chan struct{})
-	go func() {
-		defer close(resultsDone)
-		logger.Verbose0("starting results reader...")
-		defer logger.Verbose0("Results reader stopped.")
-		for result := range results {
-			if result.Err != nil {
-				logger.LogErr(result.Err)
-				errs = append(errs, result.Err)
-				cancel()
-			}
-		}
-	}()
-	reader := csv.NewReader(sourceFile)
-rowLoop:
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return errors.Errorf1From(
-				err, "failed to read row from source "+
-					"CSV: %v",
-				source.ArchivePath,
-			)
-		}
-		if len(row) != len(fieldNames)+1 {
-			return errors.Errorf2(
-				"row has %d columns but expected "+
-					"exactly %d (which includes "+
-					"the filename at the end)",
-				len(row), len(fieldNames)+1,
-			)
-		}
-		rowSpec, err := ParseSpec(row[len(row)-1])
-		if err != nil {
-			return errors.Errorf1From(
-				err, "failed to parse row filename "+
-					"%v as spec",
-				row[len(row)-1],
-			)
-		}
-		rowDestSpec, err := destFactory(ctx, dest, fieldNames, row, config)
-		if err != nil {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			break rowLoop
-		case reqs <- req{rowSpec, rowDestSpec}:
-		}
-	}
-	close(reqs)
-	<-resultsDone
-	return errors.Aggregate(errs...)
 }
 
 func remoteToLocal(ctx context.Context, source, dest *Spec, config *Config) error {
