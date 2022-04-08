@@ -1,0 +1,171 @@
+package web
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/skillian/errors"
+)
+
+// Client executes web requests.  A single client is not safe for concurrent
+// use.
+type Client struct {
+	// Client is the HTTP client that the requests are made with.
+	client *http.Client
+
+	apiURL *url.URL
+
+	token string
+
+	// license is the license used for every request (except for
+	// GetLicense).
+	license License
+}
+
+// ClientOption configures a new client.
+type ClientOption func(c *Client) error
+
+// HTTPClient configures a custom HTTP client for the web.Client to use.  If
+// not specified, http.DefaultClient is used.
+func HTTPClient(h *http.Client) ClientOption {
+	return func(c *Client) error {
+		if h == nil {
+			return errRequired("HTTPClient")
+		}
+		if c.client != nil {
+			return errRequired("HTTPClient")
+		}
+		c.client = h
+		return nil
+	}
+}
+
+// APIURL defines the base URL of the Square 9 API that the client should use.
+func APIURL(u *url.URL) ClientOption {
+	return func(c *Client) error {
+		if u == nil {
+			return errRequired("APIURL")
+		}
+		if c.apiURL != nil {
+			return errRedefined("APIURL")
+		}
+		c.apiURL = u
+		return nil
+	}
+}
+
+// NewClient creates a new client to interact with the Square 9 REST API.
+func NewClient(ctx context.Context, options ...ClientOption) (*Client, error) {
+	c := &Client{}
+	for _, opt := range options {
+		if err := opt(c); err != nil {
+			return nil, errors.ErrorfWithCause(
+				err, "failed to configure %v with %v", c, opt)
+		}
+	}
+	if c.apiURL == nil {
+		return nil, errRequired("APIURL")
+	}
+	if c.client == nil {
+		c.client = http.DefaultClient
+	}
+	u := url.URL{
+		Path: "/licenses",
+	}
+	err := c.do(ctx, http.MethodGet, &u, nil, noopValue{}, jsonValue{&c.license})
+	if err != nil {
+		return nil, errors.ErrorfWithCause(
+			err, "failed to get license")
+	}
+	c.token = c.license.Token.String()
+	return c, nil
+}
+
+// Close the client; releasing the Square 9 license.
+func (c *Client) Close() error {
+	u := url.URL{
+		Path: "/licenses/" + url.PathEscape(c.token),
+	}
+	return c.do(context.Background(), http.MethodGet, &u, nil, noopValue{}, noopValue{})
+}
+
+// Databases gets the list of databases
+func (c *Client) Databases(ctx context.Context) (ds []Database, err error) {
+	u := url.URL{
+		Path: "/dbs/",
+	}
+	err = c.do(ctx, http.MethodGet, &u, nil, jsonValue{&ds}, noopValue{})
+	return
+}
+
+// Archives gets the root archives for a database or the nested archives for a
+// given parent archive.
+func (c *Client) Archives(ctx context.Context, d *Database, a *Archive) (ars []Archive, err error) {
+	path := []string{
+		"/dbs/",
+		strconv.Itoa(d.DatabaseID),
+		"/archives",
+	}
+	if a != nil {
+		path = append(
+			path, "/",
+			strconv.Itoa(d.DatabaseID),
+			"/archives")
+	}
+	u := url.URL{
+		Path: strings.Join(path, ""),
+	}
+	err = c.do(ctx, http.MethodGet, &u, nil, jsonValue{&ars}, noopValue{})
+	return
+}
+
+// Searches gets all of the searches in an Archive.
+func (c *Client) Searches(ctx context.Context, d *Database, a *Archive) (srs []Search, err error) {
+	u := url.URL{
+		Path: strings.Join([]string{
+			"/dbs/",
+			strconv.Itoa(d.DatabaseID),
+			"/archives/",
+			strconv.Itoa(a.ArchiveID),
+			"/searches",
+		}, ""),
+	}
+	err = c.do(ctx, http.MethodGet, &u, nil, jsonValue{&srs}, noopValue{})
+	return
+}
+
+// RunSearch executes a search
+func (c *Client) RunSearch(ctx context.Context, d *Database, s *Search, a *Archive, page, recordsPerPage int, criteria map[int]string, count bool) (rs Results, err error) {
+	u := url.URL{
+		Path: strings.Join([]string{
+			"/dbs/",
+			strconv.Itoa(d.DatabaseID),
+			"/searches/",
+			strconv.Itoa(s.SearchID),
+			"/archive/",
+			strconv.Itoa(a.ArchiveID),
+			"/documents",
+		}, ""),
+	}
+	var vs Vs
+	vs.Add("page", strconv.Itoa(page))
+	vs.Add("RecordsPerPage", strconv.Itoa(recordsPerPage))
+	if criteria != nil {
+		var bs []byte
+		bs, err = json.Marshal(criteria)
+		if err != nil {
+			return
+		}
+		vs.Add("SearchCriteria", string(bs))
+	}
+	vs.Add("SecureId", s.Hash)
+	if count {
+		vs.Add("count", "true")
+	}
+	err = c.do(ctx, http.MethodGet, &u, vs, jsonValue{&rs}, noopValue{})
+	return
+}
