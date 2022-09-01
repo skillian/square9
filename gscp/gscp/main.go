@@ -8,7 +8,6 @@ import (
 	"runtime/pprof"
 
 	"github.com/skillian/argparse"
-	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/gscp"
 )
@@ -156,11 +155,12 @@ pseudo-URI is a target, then the parameters are field values.
 			w := os.Stderr
 			if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
 				logger.LogErr(
-					errors.Errorf1From(
-						err, "failed to write "+
-							"goroutine profiles "+
-							"to %v",
-						w,
+					fmt.Errorf(
+						"failed to write "+
+							"goroutine "+
+							"profiles to "+
+							"%v: %w",
+						w, err,
 					),
 				)
 			}
@@ -169,7 +169,7 @@ pseudo-URI is a target, then the parameters are field values.
 	if consoleLogLevel != "" {
 		lvl, ok := logging.ParseLevel(consoleLogLevel)
 		if !ok {
-			handleErr(errors.Errorf(
+			handleErr(fmt.Errorf(
 				"invalid logging level: %q",
 				consoleLogLevel,
 			))

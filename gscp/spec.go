@@ -3,6 +3,8 @@ package gscp
 import (
 	"context"
 	"encoding/csv"
+	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -12,8 +14,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
+	"github.com/skillian/square9/internal"
 	"github.com/skillian/square9/web"
 )
 
@@ -127,9 +129,10 @@ func ParseSpec(specString string) (*Spec, error) {
 		}
 		fs, err := parseQueryIntoFields(s)
 		if err != nil {
-			return nil, errors.Errorf1From(
-				err, "failed to parse %q as a local specification",
-				s,
+			return nil, fmt.Errorf(
+				"failed to parse %q as a local "+
+					"specification: %w",
+				s, err,
 			)
 		}
 		sp.Fields = fs
@@ -144,15 +147,16 @@ func ParseSpec(specString string) (*Spec, error) {
 		if i = strings.IndexByte(sp.Username, ':'); i != -1 {
 			v, err := url.PathUnescape(sp.Username[:i])
 			if err != nil {
-				return nil, errors.Errorf1From(
-					err, "failed to unescape username: %v",
-					sp.Username[:i],
+				return nil, fmt.Errorf(
+					"failed to unescape username: %v: %w",
+					sp.Username[:i], err,
 				)
 			}
 			v2, err := url.PathUnescape(sp.Username[i+1:])
 			if err != nil {
-				return nil, errors.Errorf0From(
-					err, "failed to unescape password",
+				return nil, fmt.Errorf(
+					"failed to unescape password: %w",
+					err,
 				)
 			}
 			sp.Username, sp.Password = v, v2
@@ -161,9 +165,9 @@ func ParseSpec(specString string) (*Spec, error) {
 	i = strings.IndexByte(s, '/')
 	j := strings.IndexByte(s, ':')
 	if j == -1 {
-		return nil, errors.Errorf1From(
-			errNoDatabase, "cannot find database in spec: %q",
-			specString,
+		return nil, fmt.Errorf(
+			"cannot find database in spec: %q: %w",
+			specString, errNoDatabase,
 		)
 	}
 	if i == -1 {
@@ -193,9 +197,9 @@ func ParseSpec(specString string) (*Spec, error) {
 	s = s[i+1:]
 	fs, err := parseQueryIntoFields(s)
 	if err != nil {
-		return nil, errors.Errorf1From(
-			err, "failed to parse %s as a specification",
-			specString,
+		return nil, fmt.Errorf(
+			"failed to parse %s as a specification: %w",
+			specString, err,
 		)
 	}
 	sp.Fields = fs
@@ -213,14 +217,16 @@ func parseQueryIntoFields(s string) (map[string]string, error) {
 		j := strings.IndexByte(s[:i], '=')
 		k, err := url.QueryUnescape(s[:j])
 		if err != nil {
-			return nil, errors.Errorf1From(
-				err, "failed to unescape key: %v", s[:j],
+			return nil, fmt.Errorf(
+				"failed to unescape key: %v: %w",
+				s[:j], err,
 			)
 		}
 		v, err := url.QueryUnescape(s[j+1 : i])
 		if err != nil {
-			return nil, errors.Errorf1From(
-				err, "failed to unescape value: %v", s[j+1:i],
+			return nil, fmt.Errorf(
+				"failed to unescape value: %v: %w",
+				s[j+1:i], err,
 			)
 		}
 		fs[k] = v
@@ -340,6 +346,11 @@ type Config struct {
 	WebSessionPoolLimit int
 }
 
+var errRemoteToRemoteNotSupported = errors.New(
+	"copying from a remote source to a remote destination " +
+		"is not yet supported",
+)
+
 func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	logger.Info2("copying source %v to %v...", source, dest)
 	ctx, created := getOrCreateWebClientMapContext(ctx, false)
@@ -353,10 +364,10 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	}
 	if created {
 		if sourceClient != nil {
-			defer errors.Catch(&Err, sourceClient.Close)
+			defer internal.Catch(&Err, sourceClient.Close)
 		}
 		if destClient != nil && destClient != sourceClient {
-			defer errors.Catch(&Err, destClient.Close)
+			defer internal.Catch(&Err, destClient.Close)
 		}
 	}
 	switch {
@@ -367,11 +378,7 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	case !localSource && localDest:
 		return remoteToLocal(ctx, source, dest, config)
 	}
-	return errors.Errorf0(
-		"copying from a remote source to a remote destination " +
-			"is not yet supported",
-	)
-	// return remoteToRemote(ctx, source, dest, config)
+	return errRemoteToRemoteNotSupported
 }
 
 // localCopy copies a local file to another local file.  There's really no
@@ -382,7 +389,7 @@ func localCopy(ctx context.Context, source, dest *Spec, config *Config) (Err err
 	if err != nil {
 		return err
 	}
-	defer errors.Catch(&Err, sourceFile.Close)
+	defer internal.Catch(&Err, sourceFile.Close)
 	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
 	if err != nil {
 		return err
@@ -409,20 +416,21 @@ func singleLocalToRemote(ctx context.Context, source, dest *Spec, config *Config
 	if err != nil {
 		return err
 	}
-	defer errors.Catch(&Err, sourceFile.Close)
+	defer internal.Catch(&Err, sourceFile.Close)
 	return ReadIntoSpecFrom(ctx, sourceFile, dest, config)
 }
+
+var errExportFilesAndDocsNotSupported = errors.New(
+	"exporting files and documents is not yet supported.  " +
+		"Please use GlobalSearch Extensions in the mean time",
+)
 
 func remoteToLocal(ctx context.Context, source, dest *Spec, config *Config) error {
 	if !dest.Kind.HasAll(IndexSpec) {
 		return singleRemoteToLocal(ctx, source, dest, config)
 	}
 	if !config.IndexOnly {
-		return errors.Errorf0(
-			"exporting files and documents is not yet " +
-				"supported.  Please use GlobalSearch " +
-				"Extensions in the mean time",
-		)
+		return errExportFilesAndDocsNotSupported
 	}
 	return remoteSearchToLocalIndex(ctx, source, dest, config)
 }
@@ -432,7 +440,7 @@ func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config
 	if err != nil {
 		return err
 	}
-	defer errors.Catch(&Err, destFile.Close)
+	defer internal.Catch(&Err, destFile.Close)
 	return WriteSpecTo(ctx, source, destFile)
 }
 
@@ -447,9 +455,9 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 	if err != nil {
 		return err
 	}
-	defer errors.Catch(&Err, f.Close)
+	defer internal.Catch(&Err, f.Close)
 	csvWriter := csv.NewWriter(f)
-	defer errors.Catch(&Err, func() error {
+	defer internal.Catch(&Err, func() error {
 		csvWriter.Flush()
 		return csvWriter.Error()
 	})
@@ -459,15 +467,20 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		if _, err := os.Stat(exportDir); err != nil {
 			if os.IsNotExist(err) {
 				if err = os.MkdirAll(exportDir, 0750); err != nil {
-					return errors.Errorf1From(
-						err, "failed to create export directory %v",
-						exportDir,
+					return fmt.Errorf(
+						"failed to create "+
+							"export "+
+							"directory "+
+							"%v: %w",
+						exportDir, err,
 					)
 				}
 			} else {
-				return errors.Errorf1From(
-					err, "failed to check if export directory %v exists",
-					exportDir,
+				return fmt.Errorf(
+					"failed to check if export "+
+						"directory %v exists: "+
+						"%w",
+					exportDir, err,
 				)
 			}
 		}
@@ -506,7 +519,7 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 					if err != nil {
 						return err
 					}
-					defer errors.Catch(&Err, f.Close)
+					defer internal.Catch(&Err, f.Close)
 					if err := s.Document(ctx, dbar.db, dbar.arch, doc, web.FileOption, f); err != nil {
 						return err
 					}
@@ -607,14 +620,14 @@ func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) (out c
 	), true
 }
 
+var errClientMapNotFound = errors.New("web client map not found in context")
+
 // getWebClientForSpec retrieves a web.Client from the context
 // for the given Spec.
 func getWebClientForSpec(ctx context.Context, sp *Spec) (web.Client, error) {
 	wcm, ok := webClientMapFromContext(ctx)
 	if !ok {
-		return nil, errors.Errorf0(
-			"web client map not found in context",
-		)
+		return nil, errClientMapNotFound
 	}
 	return wcm.getOrCreate(ctx, sp), nil
 }
@@ -700,7 +713,7 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config
 
 func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config *Config) (Err error) {
 	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
-	defer errors.Catch(&Err, f.Close)
+	defer internal.Catch(&Err, f.Close)
 	_, err = io.Copy(f, r)
 	return err
 }
@@ -719,7 +732,7 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 	}
 	if config.AllowOverwrite {
 		if !sp.Kind.HasAll(IndexSpec) || sp.Search == "" {
-			return errors.Errorf1(
+			return fmt.Errorf(
 				"remote destination specification %v "+
 					"must be to an index and must "+
 					"have a Search when used in "+
@@ -733,12 +746,12 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 	}
 	wt := createWriterToFromReader(r)
 	if err := s.Import(ctx, dbar.db, dbar.arch, flds, wt); err != nil {
-		return errors.Errorf1From(
-			err, "failed to import %v", sp,
-		)
+		return fmt.Errorf("failed to import %v: %w", sp, err)
 	}
 	return nil
 }
+
+var errSearchRequired = errors.New("search is required")
 
 // deleteExistingDocuments deletes any documents matching the sp
 // specification.  sp must have its Search field filled in and that
@@ -746,8 +759,9 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 // document is returned that matches, it is deleted.
 func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar dbArch, config *Config) error {
 	if sp.Search == "" {
-		return errors.Errorf0(
-			"cannot delete documents without a search.",
+		return fmt.Errorf(
+			"%w: cannot delete documents without a search.",
+			errSearchRequired,
 		)
 	}
 	srs, err := s.Searches(ctx, dbar.db, dbar.arch, web.Name(sp.Search))
@@ -783,7 +797,7 @@ func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar
 		return err
 	}
 	if len(res.Docs) > 1 {
-		return errors.Errorf2(
+		return fmt.Errorf(
 			"found %d documents when attempting to "+
 				"replace %v.  Nothing was replaced.",
 			len(res.Docs), sp,
@@ -818,12 +832,14 @@ func writeLocalFileTo(ctx context.Context, filename string, w io.Writer) (Err er
 		if err != nil {
 			return err
 		}
-		defer errors.Catch(&Err, rc.Close)
+		defer internal.Catch(&Err, rc.Close)
 		r = contextReader{ctx: ctx, r: rc}
 	}
 	_, err := io.Copy(w, r)
 	return err
 }
+
+var errNoDocumentsFound = errors.New("no documents found")
 
 func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer) error {
 	dbar, err := getDBArch(ctx, s, sp)
@@ -832,7 +848,7 @@ func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer)
 		return err
 	}
 	if len(srs) == 0 {
-		return errors.Errorf1(
+		return fmt.Errorf(
 			"failed to find any searches with name %q",
 			sp.Search,
 		)
@@ -850,7 +866,7 @@ func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer)
 		return err
 	}
 	if len(res.Docs) == 0 {
-		return errors.Errorf0("no documents found")
+		return errNoDocumentsFound
 	}
 	rf := createReaderFromFromWriter(w)
 	return s.Document(
@@ -870,7 +886,7 @@ func getDBArch(ctx context.Context, s *web.Session, sp *Spec) (dbar dbArch, err 
 		return dbar, err
 	}
 	if len(dbs) == 0 {
-		return dbar, errors.Errorf1(
+		return dbar, fmt.Errorf(
 			"failed to get any database with name %q",
 			sp.Database,
 		)
@@ -880,7 +896,7 @@ func getDBArch(ctx context.Context, s *web.Session, sp *Spec) (dbar dbArch, err 
 		return dbar, err
 	}
 	if len(ars) == 0 {
-		return dbar, errors.Errorf1(
+		return dbar, fmt.Errorf(
 			"failed to get any archives with name %q",
 			sp.ArchivePath,
 		)

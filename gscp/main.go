@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/skillian/expr/errors"
 	"github.com/skillian/interactivity"
 )
 
@@ -40,7 +39,7 @@ func Main(ctx context.Context, config MainConfig) error {
 		return err
 	}
 	if config.Config.AllowOverwrite && !dest.Kind.HasAll(IndexSpec) {
-		return errors.Errorf(
+		return fmt.Errorf(
 			"destination specification must be an index " +
 				"when used with overwrite.",
 		)
@@ -114,9 +113,9 @@ func ensureSpecPassword(ctx context.Context, asker interactivity.Asker, sp *Spec
 		interactivity.IsSecret(true),
 	)
 	if err != nil {
-		return errors.Errorf2From(
-			err, "failed to get %s %v password",
-			specDesc, sp,
+		return fmt.Errorf(
+			"failed to get %s %v password: %w",
+			specDesc, sp, err,
 		)
 	}
 	return nil
