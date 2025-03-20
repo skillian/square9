@@ -420,17 +420,9 @@ func singleLocalToRemote(ctx context.Context, source, dest *Spec, config *Config
 	return ReadIntoSpecFrom(ctx, sourceFile, dest, config)
 }
 
-var errExportFilesAndDocsNotSupported = errors.New(
-	"exporting files and documents is not yet supported.  " +
-		"Please use GlobalSearch Extensions in the mean time",
-)
-
 func remoteToLocal(ctx context.Context, source, dest *Spec, config *Config) error {
 	if !dest.Kind.HasAll(IndexSpec) {
 		return singleRemoteToLocal(ctx, source, dest, config)
-	}
-	if !config.IndexOnly {
-		return errExportFilesAndDocsNotSupported
 	}
 	return remoteSearchToLocalIndex(ctx, source, dest, config)
 }
@@ -499,23 +491,28 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			return err
 		}
 		crit := make([]web.SearchCriterion, 0, len(source.Fields))
-		logger.Verbose("search prompt values: %#v", source.Fields)
+		logger.Verbose1("search prompt values: %#v", source.Fields)
 		for k, v := range source.Fields {
 			crit = append(crit, web.SearchCriterion{
 				Prompt: web.Name(k),
 				Value:  v,
 			})
 		}
-		fieldVals := make([]string, len(flds))
+		fieldCount := len(flds)
+		if !config.IndexOnly {
+			fieldCount++ // for filename
+		}
+		fieldVals := make([]string, fieldCount)
+		outputFilename := &fieldVals[len(fieldVals)-1]
 		return iterateSearchResultsPages(
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
 			func(ctx context.Context, doc *web.Document) (Err error) {
 				if !config.IndexOnly {
-					outputFilename := filepath.Join(
+					*outputFilename = filepath.Join(
 						exportDir,
 						strconv.FormatInt(doc.DocumentID, 10)+doc.FileType,
 					)
-					f, err := OpenFilenameCreate(outputFilename, config.AllowOverwrite)
+					f, err := OpenFilenameCreate(*outputFilename, config.AllowOverwrite)
 					if err != nil {
 						return err
 					}
@@ -595,9 +592,12 @@ type webClientMap struct {
 	prev *webClientMap
 }
 
-func webClientMapFromContext(ctx context.Context) (wcm *webClientMap, ok bool) {
-	wcm, ok = ctx.Value((*webClientMap)(nil)).(*webClientMap)
-	return
+func webClientMapFromContext(ctx context.Context) (*webClientMap, error) {
+	wcm, ok := ctx.Value((*webClientMap)(nil)).(*webClientMap)
+	if !ok {
+		return nil, errClientMapNotFound
+	}
+	return wcm, nil
 }
 
 func CreateWebClientMapContext(ctx context.Context) context.Context {
@@ -606,8 +606,8 @@ func CreateWebClientMapContext(ctx context.Context) context.Context {
 }
 
 func getOrCreateWebClientMapContext(ctx context.Context, mustCreate bool) (out context.Context, created bool) {
-	prev, ok := webClientMapFromContext(ctx)
-	if ok && !mustCreate {
+	prev, err := webClientMapFromContext(ctx)
+	if err == nil && !mustCreate {
 		return ctx, false
 	}
 	return context.WithValue(
@@ -625,18 +625,11 @@ var errClientMapNotFound = errors.New("web client map not found in context")
 // getWebClientForSpec retrieves a web.Client from the context
 // for the given Spec.
 func getWebClientForSpec(ctx context.Context, sp *Spec) (web.Client, error) {
-	wcm, ok := webClientMapFromContext(ctx)
-	if !ok {
-		return nil, errClientMapNotFound
+	wcm, err := webClientMapFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return wcm.getOrCreate(ctx, sp), nil
-}
-
-func (m *webClientMap) add(sp *Spec, wc web.Client) {
-	k := createWebClientKeyFromSpec(sp)
-	m.mu.Lock()
-	m.m[k] = wc
-	m.mu.Unlock()
 }
 
 func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec) web.Client {
@@ -656,7 +649,7 @@ func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec) web.Client {
 	v, loaded := root.m[k]
 	if loaded {
 		root.mu.Unlock()
-		return v.(web.Client)
+		return v
 	}
 	root.m[k] = pool
 	root.mu.Unlock()
@@ -713,6 +706,9 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config
 
 func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config *Config) (Err error) {
 	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
+	if err != nil {
+		return err
+	}
 	defer internal.Catch(&Err, f.Close)
 	_, err = io.Copy(f, r)
 	return err
@@ -736,7 +732,7 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 				"remote destination specification %v "+
 					"must be to an index and must "+
 					"have a Search when used in "+
-					"conjunction with overwrite.",
+					"conjunction with overwrite",
 				sp,
 			)
 		}
@@ -760,7 +756,7 @@ var errSearchRequired = errors.New("search is required")
 func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar dbArch, config *Config) error {
 	if sp.Search == "" {
 		return fmt.Errorf(
-			"%w: cannot delete documents without a search.",
+			"%w: cannot delete documents without a search",
 			errSearchRequired,
 		)
 	}
@@ -799,7 +795,7 @@ func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar
 	if len(res.Docs) > 1 {
 		return fmt.Errorf(
 			"found %d documents when attempting to "+
-				"replace %v.  Nothing was replaced.",
+				"replace %v.  Nothing was replaced",
 			len(res.Docs), sp,
 		)
 	}
@@ -843,6 +839,9 @@ var errNoDocumentsFound = errors.New("no documents found")
 
 func writeDocumentTo(ctx context.Context, s *web.Session, sp *Spec, w io.Writer) error {
 	dbar, err := getDBArch(ctx, s, sp)
+	if err != nil {
+		return err
+	}
 	srs, err := s.Searches(ctx, dbar.db, dbar.arch, web.Name(sp.Search))
 	if err != nil {
 		return err

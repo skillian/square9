@@ -118,15 +118,7 @@ func (p *SessionPool) Session(ctx context.Context, f func(context.Context, *Sess
 		p.limit++
 		p.mutex.Unlock()
 	}
-	if len(errs) > 1 {
-		for _, err := range errs[1:] {
-			errs[0] = internal.MultiError(err, errs[0])
-		}
-	}
-	if len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return internal.MultiError(errs...)
 }
 
 var errPoolIsClosing = errors.New("pool is closing")
@@ -146,11 +138,7 @@ func (p *SessionPool) Close() error {
 		}
 	}
 	close(p.sessions)
-	var err error
-	for _, err2 := range errs {
-		err = internal.MultiError(err2, err)
-	}
-	return err
+	return internal.MultiError(errs...)
 }
 
 // RWClient maintains two client implementations: one for read-only access

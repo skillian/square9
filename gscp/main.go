@@ -41,7 +41,7 @@ func Main(ctx context.Context, config MainConfig) error {
 	if config.Config.AllowOverwrite && !dest.Kind.HasAll(IndexSpec) {
 		return fmt.Errorf(
 			"destination specification must be an index " +
-				"when used with overwrite.",
+				"when used with overwrite",
 		)
 	}
 	return CopyFromSourceToDestSpec(ctx, source, dest, &config.Config)
