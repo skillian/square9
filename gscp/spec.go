@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/skillian/interactivity"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/internal"
 	"github.com/skillian/square9/web"
@@ -357,10 +358,14 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	localSource, localDest := source.IsLocal(), dest.IsLocal()
 	var sourceClient, destClient web.Client
 	if !localSource {
-		sourceClient, _ = getWebClientForSpec(ctx, source)
+		if sourceClient, Err = getWebClientForSpec(ctx, source); Err != nil {
+			Err = fmt.Errorf("getting source client: %w", Err)
+		}
 	}
-	if !localDest {
-		destClient, _ = getWebClientForSpec(ctx, dest)
+	if Err == nil && !localDest {
+		if destClient, Err = getWebClientForSpec(ctx, dest); Err != nil {
+			Err = fmt.Errorf("getting destination client: %w", Err)
+		}
 	}
 	if created {
 		if sourceClient != nil {
@@ -369,8 +374,13 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 		if destClient != nil && destClient != sourceClient {
 			defer internal.Catch(&Err, destClient.Close)
 		}
+		if Err != nil {
+			return
+		}
 	}
 	switch {
+	case localSource && source.Kind.HasAll(IndexSpec):
+		return localCSVToDest2(ctx, source, dest, config)
 	case localSource && localDest:
 		return localCopy(ctx, source, dest, config)
 	case localSource && !localDest:
@@ -437,6 +447,14 @@ func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config
 }
 
 func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
+	if source.Search == "" {
+		if pivot := strings.LastIndexByte(source.ArchivePath, '/'); pivot != -1 {
+			source.ArchivePath, source.Search = source.ArchivePath[:pivot], source.ArchivePath[pivot+1:]
+		} else {
+			// Must be a global search
+			source.ArchivePath, source.Search = "", source.ArchivePath
+		}
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	client, err := getWebClientForSpec(ctx, source)
@@ -503,6 +521,12 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			fieldCount++ // for filename
 		}
 		fieldVals := make([]string, fieldCount)
+		for i, fld := range flds {
+			fieldVals[i] = fld.FieldName
+		}
+		if err := csvWriter.Write(fieldVals); err != nil {
+			return fmt.Errorf("writing CSV header row: %w", err)
+		}
 		outputFilename := &fieldVals[len(fieldVals)-1]
 		return iterateSearchResultsPages(
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
@@ -535,6 +559,7 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 						fieldVals[i] = ""
 					}
 				}
+
 				return csvWriter.Write(fieldVals)
 			},
 		)
@@ -675,7 +700,31 @@ func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
 	if v, ok := ctx.Value((*WebSessionPoolLimit)(nil)).(int); ok {
 		limit = v
 	}
-	return web.NewSessionPool(limit, func(ctx context.Context) (*web.Session, error) {
+	return web.NewSessionPool(limit, func(ctx context.Context) (s *web.Session, err error) {
+		if sp.Password == "" {
+			if asker, ok := ctx.Value((*interactivity.Asker)(nil)).(interactivity.Asker); ok {
+				sp.Password, err = interactivity.Ask(
+					ctx, asker,
+					fmt.Sprintf(
+						"Password for %s username %s: ",
+						sp.String(), sp.Username,
+					),
+					interactivity.IsSecret(true),
+				)
+				if err != nil {
+					return nil, fmt.Errorf(
+						"failed to get %s %v password: %w",
+						sp, sp, err,
+					)
+				}
+			}
+		}
+		if sp.Password == "" {
+			return nil, fmt.Errorf(
+				"unable to obtain password for %s",
+				sp,
+			)
+		}
 		return web.NewSession(
 			ctx,
 			web.APIURL(&url.URL{

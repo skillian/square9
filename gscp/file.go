@@ -21,7 +21,7 @@ func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 	return f, nil
 }
 
-// OpenFilenameCreate calls os.Create but first checks
+// OpenFilenameCreate only overwrites the file if overwrite is true
 func OpenFilenameCreate(filename string, overwrite bool) (f *os.File, err error) {
 	if overwrite {
 		f, err = os.Create(filename)

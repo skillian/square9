@@ -76,7 +76,7 @@ func (cf *cachedFile) Write(data []byte) (n int, err error) {
 				),
 			)
 		}
-		if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return 0, internal.MultiError(
 				f.Close(),
 				fmt.Errorf(

@@ -45,13 +45,10 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 	if ctx, err = p.initWorkers(ctx, limit, config); err != nil {
 		return
 	}
-	if err = p.loadFieldNames(ctx, source, dest); err != nil {
-		return
-	}
 	if err = p.loadProgress(source, dest); err != nil {
 		return
 	}
-	err = p.processCSV(ctx, dest)
+	err = p.processCSV(ctx, source, dest)
 	return internal.MultiError(
 		err,
 		p.saveProgress(err, source, dest),
@@ -61,7 +58,7 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 
 func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Config) (ctx2 context.Context, err error) {
 	ctx2, cancel := context.WithCancel(ctx)
-	results := workers.Work(ctx, p.reqs, func(ctx context.Context, id int, req csvReq) (struct{}, error) {
+	results := workers.Work(ctx2, p.reqs, func(ctx context.Context, id int, req csvReq) (struct{}, error) {
 		p.startRow(id, req.rowIndex)
 		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
 		if err == nil {
@@ -86,17 +83,6 @@ func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Confi
 	return ctx2, nil
 }
 
-func (p *csvProcessor) loadFieldNames(ctx context.Context, source, dest *Spec) (err error) {
-	p.fieldNames, err = getFieldNamesForSourceSpec(ctx, source, dest)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get field names for spec: %v: %w",
-			source, err,
-		)
-	}
-	return nil
-}
-
 func (p *csvProcessor) loadProgress(source, dest *Spec) (err error) {
 	progress, err := readProgressForSpecs(source, dest)
 	if err != nil {
@@ -108,14 +94,18 @@ func (p *csvProcessor) loadProgress(source, dest *Spec) (err error) {
 }
 
 func (p *csvProcessor) startRow(workerID int, rowIndex int64) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID], rowIndex)
+	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], rowIndex)
 }
 
 func (p *csvProcessor) doneRow(workerID int) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID], 0)
+	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], 0)
 }
 
-func (p *csvProcessor) processCSV(ctx context.Context, dest *Spec) error {
+func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error {
+	defer close(p.reqs)
+	if err := p.loadFieldNames(ctx, source); err != nil {
+		return fmt.Errorf("loading field names: %w", err)
+	}
 	if err := p.processTodoRows(ctx, dest); err != nil {
 		return err
 	}
@@ -131,6 +121,18 @@ func (p *csvProcessor) processCSV(ctx context.Context, dest *Spec) error {
 			return err
 		}
 	}
+}
+
+func (p *csvProcessor) loadFieldNames(ctx context.Context, source *Spec) error {
+	firstRow, err := p.readNextCSVRow()
+	if err != nil {
+		return err
+	}
+	p.fieldNames = firstRow
+	if source.Kind.HasAll(IndexSpec) {
+		p.fieldNames = p.fieldNames[:len(p.fieldNames)-1]
+	}
+	return nil
 }
 
 func (p *csvProcessor) processTodoRows(ctx context.Context, dest *Spec) error {
@@ -232,7 +234,8 @@ func (p *csvProcessor) parseSpecFromRow(row []string) (*Spec, error) {
 func (p *csvProcessor) saveProgress(processCSVErr error, source, dest *Spec) (err error) {
 	if processCSVErr == nil {
 		filename := progressFilenameForSpecs(source, dest)
-		if err = os.Remove(filename); err != nil {
+
+		if err = os.Remove(filename); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf(
 				"failed to cleanup progress file %v: %w",
 				filename, err,
