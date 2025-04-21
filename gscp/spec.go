@@ -332,6 +332,9 @@ type Config struct {
 	// an index file; it will only export the CSV.
 	IndexOnly bool
 
+	// AppendIndex is for searches inside of index files
+	AppendIndex bool
+
 	// AllowOverwrite allows the destination to be overwritten
 	// if it already exists.
 	AllowOverwrite bool
@@ -380,6 +383,9 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	}
 	switch {
 	case localSource && source.Kind.HasAll(IndexSpec):
+		if dest.Kind.HasAll(IndexSpec) {
+			config.AppendIndex = true
+		}
 		return localCSVToDest2(ctx, source, dest, config)
 	case localSource && localDest:
 		return localCopy(ctx, source, dest, config)
@@ -461,7 +467,12 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 	if err != nil {
 		return err
 	}
-	f, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	f, err := func() (*os.File, error) {
+		if config.AppendIndex {
+			return OpenFilenameAppend(dest.ArchivePath)
+		}
+		return OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	}()
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,18 @@ func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 	return f, nil
 }
 
+// OpenFilenameAppend opens a (probably index) file to be appended to
+func OpenFilenameAppend(filename string) (f *os.File, err error) {
+	f, err = os.OpenFile(filename, os.O_APPEND|os.O_EXCL|os.O_WRONLY, 0666)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"opening file %s for appending: %w",
+			filename, err,
+		)
+	}
+	return
+}
+
 // OpenFilenameCreate only overwrites the file if overwrite is true
 func OpenFilenameCreate(filename string, overwrite bool) (f *os.File, err error) {
 	if overwrite {
