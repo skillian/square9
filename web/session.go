@@ -226,8 +226,8 @@ func (s *Session) Document(ctx context.Context, d *Database, a *Archive, doc *Do
 // Import one or more files to an archive with the given fields.
 func (s *Session) Import(ctx context.Context, d *Database, a *Archive, ifs []ImportField, wts ...io.WriterTo) (Err error) {
 	id := ImportDocument{
-		Fields: make([]ImportField, len(ifs)),
-		Files:  make([]ImportFile, len(wts)),
+		Fields: make([]ImportField, 0, len(ifs)),
+		Files:  make([]ImportFile, 0, len(wts)),
 	}
 	cf := newCachedFile()
 	defer errors.WrapDeferred(&Err, cf.Close)
@@ -587,9 +587,7 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 					"subarchives: %w", res.Err,
 			))
 		}
-		for _, a := range res.Res.Archives {
-			archElems = append(archElems, a)
-		}
+		archElems = append(archElems, res.Res.Archives...)
 	}
 	db.archs = makeArchs(archElems)
 	if logger.EffectiveLevel() <= logging.VerboseLevel {
@@ -609,10 +607,8 @@ func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *A
 			a, err,
 		)
 	}
-	if len(id.Fields) < len(ifs) {
-		if cap(id.Fields) < len(ifs) {
-			id.Fields = make([]ImportField, len(ifs))
-		}
+	if cap(id.Fields) < len(ifs) {
+		id.Fields = make([]ImportField, len(ifs))
 	}
 	id.Fields = id.Fields[:len(ifs)]
 	for i, f := range ifs {
