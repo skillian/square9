@@ -429,7 +429,7 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 	u.RawQuery = q.Encode()
 	url := u.String()
 
-	reqBody, err := r.getReadCloser(s)
+	reqBody, err := r.getReadCloser()
 	if err != nil {
 		return fmt.Errorf(
 			"error retrieving request body from request "+
@@ -510,7 +510,7 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 	if err != nil {
 		return err
 	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
+	if !httpStatusOK(res.StatusCode) {
 		return fmt.Errorf(
 			"non-success response code: %d - %s",
 			res.StatusCode, res.Status)
@@ -544,7 +544,7 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 	archiveWg := sync.WaitGroup{}
 	archiveWg.Add(len(model.Archives))
 	const arbitraryConcurrencyLimit = 4
-	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, _ int, a *Archive) (models Archives, err error) {
+	archivesModels := workers.Work(ctx, pendingArchives, func(ctx context.Context, _ workers.WorkerID, a *Archive) (models Archives, err error) {
 		var model Archives
 		defer archiveWg.Done()
 		if err = s.request(

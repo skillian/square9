@@ -157,7 +157,7 @@ func (r *request) urlAndQuery() (u *url.URL, q url.Values) {
 	return u, q
 }
 
-func (r *request) getReadCloser(s *Session) (rc io.ReadCloser, Err error) {
+func (r *request) getReadCloser() (rc io.ReadCloser, Err error) {
 	if r.reqBody == nil {
 		return http.NoBody, nil
 	}
