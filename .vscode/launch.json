@@ -13,10 +13,10 @@
 			"args": [
 				"--from-index",
 				"--to-index",
-				"--overwrite",
-				"--log-console", "verbose",
-				"C:/Users/Sean/Downloads/Blattner Invoices_test.csv",
-				"C:/Users/Sean/Downloads/Blattner Invoices_exported.csv"
+				"--log-console", "warn",
+				"--web-session-pool-limit", "4",
+				"gscp://TenantAdmin@lancorow.mysquare9.com:ROW_PROD/ROW_OC_Probate/Browse ROW_OC_Probate",
+				"E:\\square9\\LancoROW\\ROW_OC_Probate.csv"
 			]
 		}
 
