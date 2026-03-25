@@ -1,9 +1,8 @@
 package web
 
 import (
+	"fmt"
 	"unsafe"
-
-	"github.com/skillian/errors"
 )
 
 // SearchCriterion is a single search parameter
@@ -24,8 +23,10 @@ type dbs struct {
 func (dbs *dbs) db(id ID) (*db, error) {
 	i, ok := dbs.byID[id]
 	if !ok {
-		return nil, errors.Errorf(
-			"failed to get database from cache by ID: %d", id)
+		return nil, fmt.Errorf(
+			"failed to get database from cache by ID: %d",
+			id,
+		)
 	}
 	return &dbs.elems[i], nil
 }
@@ -37,8 +38,10 @@ func (dbs *dbs) arch(dbid, arid ID) (ar *arch, err error) {
 	}
 	i, ok := db.archs.byID[arid]
 	if !ok {
-		return nil, errors.Errorf(
-			"failed to get archive from cache by ID: %d", arid)
+		return nil, fmt.Errorf(
+			"failed to get archive from cache by ID: %d",
+			arid,
+		)
 	}
 	return &db.archs.elems[i], nil
 }
@@ -50,8 +53,10 @@ func (dbs *dbs) search(dbid, arid, srid ID) (*search, error) {
 	}
 	i, ok := ar.searches.byID[srid]
 	if !ok {
-		return nil, errors.Errorf(
-			"failed to get search from cache by ID: %d", srid)
+		return nil, fmt.Errorf(
+			"failed to get search from cache by ID: %d",
+			srid,
+		)
 	}
 	return &ar.searches.elems[i], nil
 }

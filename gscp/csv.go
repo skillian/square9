@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/skillian/expr/errors"
+	"github.com/skillian/square9/internal"
 	"github.com/skillian/workers"
 )
 
@@ -34,7 +35,7 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 	if err != nil {
 		return err
 	}
-	defer errors.Catch(&err, sourceFile.Close)
+	defer internal.Catch(&err, sourceFile.Close)
 	p := &csvProcessor{
 		currentRowIndex:      -1,
 		reader:               csv.NewReader(sourceFile),
@@ -44,14 +45,11 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 	if ctx, err = p.initWorkers(ctx, limit, config); err != nil {
 		return
 	}
-	if err = p.loadFieldNames(ctx, source, dest); err != nil {
-		return
-	}
 	if err = p.loadProgress(source, dest); err != nil {
 		return
 	}
-	err = p.processCSV(ctx, dest)
-	return errors.Aggregate(
+	err = p.processCSV(ctx, source, dest)
+	return internal.MultiError(
 		err,
 		p.saveProgress(err, source, dest),
 		<-p.workerErrors,
@@ -60,7 +58,7 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 
 func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Config) (ctx2 context.Context, err error) {
 	ctx2, cancel := context.WithCancel(ctx)
-	results := workers.Work(ctx, p.reqs, func(ctx context.Context, id int, req csvReq) (struct{}, error) {
+	results := workers.Work(ctx2, p.reqs, func(ctx context.Context, id int, req csvReq) (struct{}, error) {
 		p.startRow(id, req.rowIndex)
 		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
 		if err == nil {
@@ -80,20 +78,9 @@ func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Confi
 				cancel()
 			}
 		}
-		p.workerErrors <- errors.Aggregate(errs...)
+		p.workerErrors <- internal.MultiError(errs...)
 	}()
 	return ctx2, nil
-}
-
-func (p *csvProcessor) loadFieldNames(ctx context.Context, source, dest *Spec) (err error) {
-	p.fieldNames, err = getFieldNamesForSourceSpec(ctx, source, dest)
-	if err != nil {
-		return errors.Errorf1From(
-			err, "failed to get field names for spec: %v",
-			source,
-		)
-	}
-	return nil
 }
 
 func (p *csvProcessor) loadProgress(source, dest *Spec) (err error) {
@@ -107,14 +94,18 @@ func (p *csvProcessor) loadProgress(source, dest *Spec) (err error) {
 }
 
 func (p *csvProcessor) startRow(workerID int, rowIndex int64) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID], rowIndex)
+	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], rowIndex)
 }
 
 func (p *csvProcessor) doneRow(workerID int) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID], 0)
+	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], 0)
 }
 
-func (p *csvProcessor) processCSV(ctx context.Context, dest *Spec) error {
+func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error {
+	defer close(p.reqs)
+	if err := p.loadFieldNames(ctx, source); err != nil {
+		return fmt.Errorf("loading field names: %w", err)
+	}
 	if err := p.processTodoRows(ctx, dest); err != nil {
 		return err
 	}
@@ -132,6 +123,18 @@ func (p *csvProcessor) processCSV(ctx context.Context, dest *Spec) error {
 	}
 }
 
+func (p *csvProcessor) loadFieldNames(ctx context.Context, source *Spec) error {
+	firstRow, err := p.readNextCSVRow()
+	if err != nil {
+		return err
+	}
+	p.fieldNames = firstRow
+	if source.Kind.HasAll(IndexSpec) {
+		p.fieldNames = p.fieldNames[:len(p.fieldNames)-1]
+	}
+	return nil
+}
+
 func (p *csvProcessor) processTodoRows(ctx context.Context, dest *Spec) error {
 	for {
 		todoRowIndex, ok := p.getNextTodoRowIndex()
@@ -141,9 +144,9 @@ func (p *csvProcessor) processTodoRows(ctx context.Context, dest *Spec) error {
 		logger.Info1("(re)processing row %d", todoRowIndex)
 		row, err := p.skipRowsUntilRowIndex(todoRowIndex)
 		if err != nil {
-			return errors.Errorf1From(
-				err, "failed to process todo line %d",
-				todoRowIndex,
+			return fmt.Errorf(
+				"failed to process todo line %d: %w",
+				todoRowIndex, err,
 			)
 		}
 		if err := p.processCSVRow(ctx, row, dest); err != nil {
@@ -170,7 +173,7 @@ func (p *csvProcessor) skipRowsUntilRowIndex(rowIndex int64) (row []string, err 
 		case p.currentRowIndex == rowIndex:
 			return row, nil
 		case p.currentRowIndex > rowIndex:
-			return nil, errors.Errorf1(
+			return nil, fmt.Errorf(
 				"programming error: skipped row %d",
 				rowIndex,
 			)
@@ -184,8 +187,8 @@ func (p *csvProcessor) readNextCSVRow() ([]string, error) {
 		return nil, err
 	}
 	if err != nil {
-		return nil, errors.Errorf0From(
-			err, "failed to read row from CSV",
+		return nil, fmt.Errorf(
+			"failed to read row from CSV: %w", err,
 		)
 	}
 	p.currentRowIndex++
@@ -219,10 +222,10 @@ func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, dest *Sp
 func (p *csvProcessor) parseSpecFromRow(row []string) (*Spec, error) {
 	rowSpec, err := ParseSpec(row[len(row)-1])
 	if err != nil {
-		return nil, errors.Errorf1From(
-			err, "failed to parse row filename "+
-				"%v as spec",
-			row[len(row)-1],
+		return nil, fmt.Errorf(
+			"failed to parse row filename "+
+				"%v as spec: %w",
+			row[len(row)-1], err,
 		)
 	}
 	return rowSpec, nil
@@ -231,10 +234,11 @@ func (p *csvProcessor) parseSpecFromRow(row []string) (*Spec, error) {
 func (p *csvProcessor) saveProgress(processCSVErr error, source, dest *Spec) (err error) {
 	if processCSVErr == nil {
 		filename := progressFilenameForSpecs(source, dest)
-		if err = os.Remove(filename); err != nil {
-			return errors.Errorf1From(
-				err, "failed to cleanup progress file %v",
-				filename,
+
+		if err = os.Remove(filename); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf(
+				"failed to cleanup progress file %v: %w",
+				filename, err,
 			)
 		}
 		return nil
@@ -277,11 +281,11 @@ func readProgressForSpecs(source, dest *Spec) (p indexProgress, err error) {
 	}
 	f, err := OpenFilenameRead(filename)
 	if err != nil {
-		return p, errors.Errorf0From(
-			err, "failed to open progress file",
+		return p, fmt.Errorf(
+			"failed to open progress file: %w", err,
 		)
 	}
-	defer errors.Catch(&err, f.Close)
+	defer internal.Catch(&err, f.Close)
 	err = json.NewDecoder(f).Decode(&p)
 	return
 }
@@ -290,11 +294,9 @@ func writeProgressForSpecs(p indexProgress, source, dest *Spec) (err error) {
 	filename := progressFilenameForSpecs(source, dest)
 	f, err := OpenFilenameCreate(filename, true)
 	if err != nil {
-		return errors.Errorf0From(
-			err, "failed to open progress file",
-		)
+		return fmt.Errorf("failed to open progress file: %w", err)
 	}
-	defer errors.Catch(&err, f.Close)
+	defer internal.Catch(&err, f.Close)
 	temp := make([]int64, 0, len(p.PendingLineIndexes))
 	for _, i := range p.PendingLineIndexes {
 		if i == 0 {

@@ -2,11 +2,10 @@ package gscp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"strings"
-
-	"github.com/skillian/expr/errors"
 )
 
 // OpenFilenameRead calls os.Open but wraps the error with more
@@ -14,15 +13,27 @@ import (
 func OpenFilenameRead(filename string) (io.ReadCloser, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, errors.Errorf1From(
-			err, "failed to open file %v for reading",
-			filename,
+		return nil, fmt.Errorf(
+			"failed to open file %v for reading: %w",
+			filename, err,
 		)
 	}
 	return f, nil
 }
 
-// OpenFilenameCreate calls os.Create but first checks
+// OpenFilenameAppend opens a (probably index) file to be appended to
+func OpenFilenameAppend(filename string) (f *os.File, err error) {
+	f, err = os.OpenFile(filename, os.O_APPEND|os.O_EXCL|os.O_WRONLY, 0666)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"opening file %s for appending: %w",
+			filename, err,
+		)
+	}
+	return
+}
+
+// OpenFilenameCreate only overwrites the file if overwrite is true
 func OpenFilenameCreate(filename string, overwrite bool) (f *os.File, err error) {
 	if overwrite {
 		f, err = os.Create(filename)
@@ -30,9 +41,9 @@ func OpenFilenameCreate(filename string, overwrite bool) (f *os.File, err error)
 		f, err = os.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
 	}
 	if err != nil {
-		return nil, errors.Errorf1From(
-			err, "failed to open output file %v for writing",
-			filename,
+		return nil, fmt.Errorf(
+			"failed to open output file %v for writing: %w",
+			filename, err,
 		)
 	}
 	return
@@ -42,15 +53,15 @@ func createDirIfNotExist(path string) error {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		if err = os.MkdirAll(path, 0750); err != nil {
-			return errors.Errorf1From(
-				err, "failed to create directory: %v",
-				path,
+			return fmt.Errorf(
+				"failed to create directory: %v: %w",
+				path, err,
 			)
 		}
 	} else if err != nil {
-		return errors.Errorf1From(
-			err, "failed to check if directory %v exists",
-			path,
+		return fmt.Errorf(
+			"failed to check if directory %v exists: %w",
+			path, err,
 		)
 	}
 	return nil
@@ -73,11 +84,11 @@ func createReaderFromFromWriter(w io.Writer) io.ReaderFrom {
 	return readerFromFunc(func(r io.Reader) (int64, error) {
 		n, err := io.Copy(w, r)
 		if err != nil {
-			err = errors.Errorf2From(
-				err, "error while copying %[1]v "+
+			err = fmt.Errorf(
+				"error while copying %[1]v "+
 					"(type: %[1]T) to %[2]v "+
-					"(type: %[2]T)",
-				r, w,
+					"(type: %[2]T): %w",
+				r, w, err,
 			)
 		}
 		return n, err
@@ -100,11 +111,11 @@ func createWriterToFromReader(r io.Reader) io.WriterTo {
 	return writerToFunc(func(w io.Writer) (int64, error) {
 		n, err := io.Copy(w, r)
 		if err != nil {
-			err = errors.Errorf2From(
-				err, "error while copying %[1]v "+
+			err = fmt.Errorf(
+				"error while copying %[1]v "+
 					"(type: %[1]T) to %[2]v "+
-					"(type: %[2]T)",
-				r, w,
+					"(type: %[2]T): %w",
+				r, w, err,
 			)
 		}
 		return n, err

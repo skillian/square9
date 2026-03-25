@@ -18,6 +18,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/skillian/errors"
 	"github.com/skillian/logging"
+	"github.com/skillian/square9/internal"
 	"github.com/skillian/workers"
 )
 
@@ -92,8 +93,10 @@ func APIURLString(u string) SessionOption {
 	return func(s *Session) error {
 		ur, err := url.Parse(u)
 		if err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to parse %q as URL", s)
+			return fmt.Errorf(
+				"failed to parse %q as URL: %w",
+				u, err,
+			)
 		}
 		return APIURL(ur)(s)
 	}
@@ -131,8 +134,9 @@ func NewSession(ctx context.Context, options ...SessionOption) (*Session, error)
 		ctx, Path("licenses"),
 		ResponseBody(JSONTo(&s.lic)),
 	); err != nil {
-		return nil, errors.ErrorfWithCause(
-			err, "failed to get license")
+		return nil, fmt.Errorf(
+			"failed to get license: %w", err,
+		)
 	}
 	s.token = s.lic.Token.String()
 	return s, nil
@@ -146,8 +150,9 @@ func (s *Session) Databases(ctx context.Context, f IDAndNamerFilter) (ds []Datab
 		var model Databases
 		err = s.request(ctx, Path("dbs", ""), ResponseBody(JSONTo(&model)))
 		if err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to get database list")
+			return nil, fmt.Errorf(
+				"failed to get database list: %w", err,
+			)
 		}
 		s.dbs.elems = make([]db, len(model.Databases))
 		for i, d := range model.Databases {
@@ -194,8 +199,8 @@ func (s *Session) DeleteDocument(ctx context.Context, d *Database, a *Archive, d
 		ctx, Path(d, a, doc, "delete"), SecureID(doc.Hash),
 	)
 	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to delete document %v", doc,
+		return fmt.Errorf(
+			"failed to delete document %v: %w", doc, err,
 		)
 	}
 	return nil
@@ -211,7 +216,9 @@ func (s *Session) Document(ctx context.Context, d *Database, a *Archive, doc *Do
 		ResponseBody(nopReaderFromCloser{rf}),
 	)
 	if err != nil {
-		return errors.ErrorfWithCause(err, "failed to get document %v", doc)
+		return fmt.Errorf(
+			"failed to get document %v: %w", doc, err,
+		)
 	}
 	return nil
 }
@@ -219,8 +226,8 @@ func (s *Session) Document(ctx context.Context, d *Database, a *Archive, doc *Do
 // Import one or more files to an archive with the given fields.
 func (s *Session) Import(ctx context.Context, d *Database, a *Archive, ifs []ImportField, wts ...io.WriterTo) (Err error) {
 	id := ImportDocument{
-		Fields: make([]ImportField, len(ifs)),
-		Files:  make([]ImportFile, len(wts)),
+		Fields: make([]ImportField, 0, len(ifs)),
+		Files:  make([]ImportFile, 0, len(wts)),
 	}
 	cf := newCachedFile()
 	defer errors.WrapDeferred(&Err, cf.Close)
@@ -237,7 +244,9 @@ func (s *Session) Import(ctx context.Context, d *Database, a *Archive, ifs []Imp
 			ContentType(contentType),
 			ResponseBody(JSONTo(&id)),
 		); err != nil {
-			return errors.ErrorfWithCause(err, "error uploading %v", wt)
+			return fmt.Errorf(
+				"error uploading %v: %w", wt, err,
+			)
 		}
 	}
 	if err := s.setImportDocumentFields(ctx, d, a, ifs, &id); err != nil {
@@ -269,8 +278,10 @@ func (s *Session) Fields(ctx context.Context, d *Database, a *Archive, f IDAndNa
 			ctx, Path(d, a), Value("type", "fields"),
 			ResponseBody(JSONTo(&ar.fields.elems)))
 		if err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to get fields from archive %v", a)
+			return nil, fmt.Errorf(
+				"failed to get fields from archive "+
+					"%v: %w", a, err,
+			)
 		}
 		ar.fields.lookup = lookupOf(ar.fields.elems)
 		if logger.EffectiveLevel() <= logging.VerboseLevel {
@@ -309,8 +320,10 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 			ResponseBody(JSONTo(&ar.searches.elems)),
 		)
 		if err != nil {
-			return nil, errors.ErrorfWithCause(
-				err, "failed to get searches from archive %v", a)
+			return nil, fmt.Errorf(
+				"failed to get searches from archive "+
+					"%v: %w", a, err,
+			)
 		}
 		ar.searches.lookup = lookupOf(ar.searches.elems)
 		for i := range ar.searches.elems {
@@ -360,15 +373,17 @@ func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr
 	if len(fs) > 0 {
 		crit, err := s.initSearchCriteria(ctx, ar, src, fs)
 		if err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to initialize search criteria",
+			return fmt.Errorf(
+				"failed to initialize search "+
+					"criteria: %w", err,
 			)
 		}
 		bs, err := json.Marshal(crit)
 		if err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to marshal search criteria into "+
-					"JSON")
+			return fmt.Errorf(
+				"failed to marshal search criteria "+
+					"into JSON: %w", err,
+			)
 		}
 		reqOpts = append(reqOpts, Value("SearchCriteria", string(bs)))
 	}
@@ -416,9 +431,10 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 
 	reqBody, err := r.getReadCloser(s)
 	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "error retrieving request body from request %v",
-			r,
+		return fmt.Errorf(
+			"error retrieving request body from request "+
+				"%v: %w",
+			r, err,
 		)
 	}
 	if !equals(reqBody, r.reqBody) {
@@ -434,9 +450,10 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 		buf := s.bufs.Get().(*sessionBuffer)
 		defer errors.WrapDeferred(&Err, buf.Close)
 		if _, err := io.Copy(buf, io.LimitReader(reqBody, 512)); err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to \"peek\" at request "+
-					"body to determine content type",
+			return fmt.Errorf(
+				"failed to \"peek\" at request "+
+					"body to determine content "+
+					"type: %w", err,
 			)
 		}
 		logger.Verbose2(
@@ -454,9 +471,10 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 		ctx, string(r.method), url, reqBody,
 	)
 	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to create new HTTP request for "+
-				"%q", url)
+		return fmt.Errorf(
+			"failed to create new HTTP request for "+
+				"%q: %w", url, err,
+		)
 	}
 
 	if s.basicAuth[0] != "" {
@@ -493,14 +511,17 @@ func (s *Session) request(ctx context.Context, options ...RequestOption) (Err er
 		return err
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return errors.Errorf(
+		return fmt.Errorf(
 			"non-success response code: %d - %s",
 			res.StatusCode, res.Status)
 	}
 	if r.resBody != nil {
 		if _, err = r.resBody.ReadFrom(res.Body); err != nil {
-			return errors.ErrorfWithCause(
-				err, "error while handling response body")
+			return fmt.Errorf(
+				"error while handling response body: "+
+					"%w",
+				err,
+			)
 		}
 	}
 	return
@@ -513,9 +534,10 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 		ResponseBody(JSONTo(&model)),
 	)
 	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to get archives from database %v",
-			db.Database.DatabaseName,
+		return fmt.Errorf(
+			"failed to get archives from "+
+				"database %v: %w",
+			db.Database.DatabaseName, err,
 		)
 	}
 	pendingArchives := make(chan *Archive, 1024)
@@ -529,10 +551,10 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 			ctx, Path(&db.Database, a),
 			ResponseBody(JSONTo(&model)),
 		); err != nil {
-			err = errors.ErrorfWithCause(
-				err, "failed to get child archives of "+
-					"%v (ID: %v)",
-				a.ArchiveName, a.ArchiveID,
+			err = fmt.Errorf(
+				"failed to get child archives of "+
+					"%v (ID: %v): %w",
+				a.ArchiveName, a.ArchiveID, err,
 			)
 			return
 		}
@@ -559,15 +581,13 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 	err = nil
 	for res := range archivesModels {
 		if res.Err != nil {
-			err = errors.ErrorfWithCauseAndContext(
-				res.Err, err, "error encountered "+
+			err = internal.MultiError(err, fmt.Errorf(
+				"error encountered "+
 					"while attempting to retrieve "+
-					"subarchives",
-			)
+					"subarchives: %w", res.Err,
+			))
 		}
-		for _, a := range res.Res.Archives {
-			archElems = append(archElems, a)
-		}
+		archElems = append(archElems, res.Res.Archives...)
 	}
 	db.archs = makeArchs(archElems)
 	if logger.EffectiveLevel() <= logging.VerboseLevel {
@@ -582,14 +602,13 @@ func (s *Session) initArchs(ctx context.Context, db *db) error {
 func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *Archive, ifs []ImportField, id *ImportDocument) error {
 	flds, err := s.Fields(ctx, d, a, nil)
 	if err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to get fields for archive %v", a,
+		return fmt.Errorf(
+			"failed to get fields for archive %v: %w",
+			a, err,
 		)
 	}
-	if len(id.Fields) < len(ifs) {
-		if cap(id.Fields) < len(ifs) {
-			id.Fields = make([]ImportField, len(ifs))
-		}
+	if cap(id.Fields) < len(ifs) {
+		id.Fields = make([]ImportField, len(ifs))
 	}
 	id.Fields = id.Fields[:len(ifs)]
 	for i, f := range ifs {
@@ -606,7 +625,7 @@ func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *A
 			break
 		}
 		if !fieldFound {
-			return errors.Errorf(
+			return fmt.Errorf(
 				"archive %v has no field %q", a.ArchiveName,
 				f.Name,
 			)
@@ -628,7 +647,7 @@ func (s *Session) initSearchCriteria(ctx context.Context, ar *arch, src *search,
 		}
 		indexes = ar.fields.lookup.lookup(f.Prompt, indexes[:0])
 		if len(indexes) == 0 {
-			return nil, errors.Errorf(
+			return nil, fmt.Errorf(
 				"failed to find prompt or field with name/id: %v",
 				f.Prompt,
 			)
@@ -642,7 +661,7 @@ func (s *Session) initSearchCriteria(ctx context.Context, ar *arch, src *search,
 					continue
 				}
 				if pr != nil {
-					return nil, errors.Errorf(
+					return nil, fmt.Errorf(
 						"ambiguous use of field %v (ID: %d) as search %v prompt value.  Please use the prompt ID or name instead of the field ID or name.",
 						fld.FieldName, fld.FieldID,
 						src.SearchName,
@@ -651,7 +670,7 @@ func (s *Session) initSearchCriteria(ctx context.Context, ar *arch, src *search,
 				pr = p
 			}
 			if pr == nil {
-				return nil, errors.Errorf(
+				return nil, fmt.Errorf(
 					"No prompt found in search %v with field %v (ID: %v)",
 					src.SearchName,
 					fld.FieldName,

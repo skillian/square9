@@ -15,8 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/skillian/errors"
 )
 
 const (
@@ -171,8 +169,9 @@ func (r *request) getReadCloser(s *Session) (rc io.ReadCloser, Err error) {
 	}
 	cf := newCachedFile()
 	if _, err := r.reqBody.WriteTo(cf); err != nil {
-		return nil, errors.ErrorfWithCause(
-			err, "failed to copy request body into cached file",
+		return nil, fmt.Errorf(
+			"failed to copy request body into "+
+				"cached file: %w", err,
 		)
 	}
 	return cf, nil
@@ -302,14 +301,15 @@ type tempFile struct {
 
 func (f tempFile) Close() error {
 	if err := f.File.Close(); err != nil {
-		return errors.ErrorfWithCause(
-			err, "error attempting to close %v", f.File,
+		return fmt.Errorf(
+			"error attempting to close %v: %w",
+			f.File, err,
 		)
 	}
 	if err := os.Remove(f.File.Name()); err != nil {
-		return errors.ErrorfWithCause(
-			err, "failed to remove temporary file: %v",
-			f.File.Name(),
+		return fmt.Errorf(
+			"failed to remove temporary file: %v: %w",
+			f.File.Name(), err,
 		)
 	}
 	return nil
@@ -339,9 +339,9 @@ func copyIntoMultipartForm(wt io.WriterTo, w io.Writer) (contentType string, err
 	ext := ""
 	exts, err := mime.ExtensionsByType(contentType)
 	if err != nil {
-		return "", errors.ErrorfWithCause(
-			err, "failed to get extension for content type %v",
-			contentType,
+		return "", fmt.Errorf(
+			"failed to get extension for content type "+
+				"%v: %w", contentType, err,
 		)
 	}
 	if len(exts) > 0 {
@@ -356,19 +356,19 @@ func copyIntoMultipartForm(wt io.WriterTo, w io.Writer) (contentType string, err
 	)
 	w, err = form.CreatePart(h)
 	if err != nil {
-		return "", errors.ErrorfWithCause(
-			err, "failed to create form file",
+		return "", fmt.Errorf(
+			"failed to create form file: %w", err,
 		)
 	}
 	if _, err := wt.WriteTo(w); err != nil {
-		return "", errors.ErrorfWithCause(
-			err, "failed to write import file into "+
-				"multipart message",
+		return "", fmt.Errorf(
+			"failed to write import file into "+
+				"multipart message: %w", err,
 		)
 	}
 	if err := form.Close(); err != nil {
-		return "", errors.ErrorfWithCause(
-			err, "failed to close multipart message",
+		return "", fmt.Errorf(
+			"failed to close multipart message: %w", err,
 		)
 	}
 	return form.FormDataContentType(), nil
@@ -378,10 +378,10 @@ func getContentLength(wt io.WriterTo) (int64, error) {
 	if sr, ok := wt.(interface{ Stat() (fs.FileInfo, error) }); ok {
 		st, err := sr.Stat()
 		if err != nil {
-			return 0, errors.ErrorfWithCause(
-				err, "failed to stat request body %+v to "+
-					"get content length",
-				wt,
+			return 0, fmt.Errorf(
+				"failed to stat request body %+v to "+
+					"get content length: %w",
+				wt, err,
 			)
 		}
 		return st.Size(), nil

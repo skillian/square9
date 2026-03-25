@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/skillian/errors"
+	"github.com/skillian/square9/internal"
 )
 
 // SessionPool is a pool of individual sessions.  Sessions are not safe for
@@ -47,10 +48,12 @@ func NewSessionPool(limit int, factory func(context.Context) (*Session, error)) 
 	return p
 }
 
+var errPoolIsClosed = errors.New("pool is closed")
+
 func (p *SessionPool) getSession(ctx context.Context) (*Session, error) {
 	sessionOrErr := func(s *Session, ok bool) (*Session, error) {
 		if !ok {
-			return nil, errors.Errorf("Client pool was closed.")
+			return nil, errPoolIsClosed
 		}
 		return s, nil
 	}
@@ -115,21 +118,15 @@ func (p *SessionPool) Session(ctx context.Context, f func(context.Context, *Sess
 		p.limit++
 		p.mutex.Unlock()
 	}
-	if len(errs) > 1 {
-		for _, err := range errs[1:] {
-			errs[0] = errors.CreateError(err, nil, errs[0], 0)
-		}
-	}
-	if len(errs) > 0 {
-		return errs[0]
-	}
-	return nil
+	return internal.MultiError(errs...)
 }
+
+var errPoolIsClosing = errors.New("pool is closing")
 
 // Close the pool by waiting for and closing all the sessions from the pool.
 func (p *SessionPool) Close() error {
 	p.mutex.Lock()
-	p.factory = func(context.Context) (*Session, error) { return nil, errors.Errorf("pool is closing") }
+	p.factory = func(context.Context) (*Session, error) { return nil, errPoolIsClosing }
 	limit := p.limit
 	p.limit = 0
 	p.mutex.Unlock()
@@ -141,11 +138,7 @@ func (p *SessionPool) Close() error {
 		}
 	}
 	close(p.sessions)
-	var err error
-	for _, err2 := range errs {
-		err = errors.CreateError(err2, nil, err, 0)
-	}
-	return err
+	return internal.MultiError(errs...)
 }
 
 // RWClient maintains two client implementations: one for read-only access

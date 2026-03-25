@@ -8,7 +8,6 @@ import (
 	"runtime/pprof"
 
 	"github.com/skillian/argparse"
-	"github.com/skillian/expr/errors"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/gscp"
 )
@@ -26,30 +25,32 @@ func main() {
 		),
 		argparse.Epilog(
 			`A specification can be one of the following:
-	1. A filesystem path (on the local computer or a network location)
-	2. A GlobalSearch API URL to a document
-	3. A gscp pseudo-URI.
+	1. A filesystem path (on the local computer or a network
+	   location)
+	2. A gscp pseudo-URI.
 
-A gscp pseudo-URI is meant to resemble a remote host specification like in scp
-and has the following format:
+A gscp pseudo-URI is meant to resemble a remote host specification like
+in scp and has the following format:
 
   [gscp://][username@]hostname[/api-path]:database[/archive[/sub-archive ...]]
 
 where:
-	username:	The GlobalSearch user name.  The password must be
-			specified within the configuration file or
+	username:	The GlobalSearch user name.  The password must
+			be specified within the configuration file or
 			given interactively.
 	hostname:	The hostname of the GlobalSearch API server.
-	api-path:	The path on the hostname to the GlobalSearch API.  This
-			only needs to be specified if it is not /square9api.
+	api-path:	The path on the hostname to the GlobalSearch
+			API.  This only needs to be specified if it is
+			not /square9api.
 	database:	The name of the GlobalSearch database.
 	archive:	The name of the GlobalSearch archive.
 	sub-archive:	Optional sub archive(s)
 
-A gscp pseudo-URI can have query parameters starting with a question mark ("?")
-and separated by ampersands ("&").  When a gscp pseudo-URI is a source, then
-the parameters represent prompt or field values to a search.  When a gscp
-pseudo-URI is a target, then the parameters are field values.
+A gscp pseudo-URI can have query parameters starting with a question
+mark ("?") and separated by ampersands ("&").  When a gscp pseudo-URI
+is a source, then the parameters represent prompt or field values to a
+search.  When a gscp pseudo-URI is a target, then the parameters are
+field values.
 `,
 		),
 	)
@@ -147,7 +148,7 @@ pseudo-URI is a target, then the parameters are field values.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	{
-		sigs := make(chan os.Signal)
+		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, os.Interrupt)
 		go func() {
 			defer cancel()
@@ -156,11 +157,12 @@ pseudo-URI is a target, then the parameters are field values.
 			w := os.Stderr
 			if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
 				logger.LogErr(
-					errors.Errorf1From(
-						err, "failed to write "+
-							"goroutine profiles "+
-							"to %v",
-						w,
+					fmt.Errorf(
+						"failed to write "+
+							"goroutine "+
+							"profiles to "+
+							"%v: %w",
+						w, err,
 					),
 				)
 			}
@@ -169,7 +171,7 @@ pseudo-URI is a target, then the parameters are field values.
 	if consoleLogLevel != "" {
 		lvl, ok := logging.ParseLevel(consoleLogLevel)
 		if !ok {
-			handleErr(errors.Errorf(
+			handleErr(fmt.Errorf(
 				"invalid logging level: %q",
 				consoleLogLevel,
 			))

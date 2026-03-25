@@ -1,7 +1,8 @@
 package web
 
 import (
-	"github.com/skillian/errors"
+	"fmt"
+
 	"github.com/skillian/logging"
 )
 
@@ -11,9 +12,9 @@ var (
 )
 
 func errRequired(what string) error {
-	return errors.Errorf(what + " is required and cannot be nil/zero")
+	return fmt.Errorf(what + " is required and cannot be nil/zero")
 }
 
 func errRedefined(what string) error {
-	return errors.Errorf("redefinition of " + what)
+	return fmt.Errorf("redefinition of " + what)
 }

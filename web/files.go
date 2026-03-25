@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillian/errors"
+	"github.com/skillian/square9/internal"
 )
 
 type cachedFile struct {
@@ -44,9 +45,9 @@ func (cf *cachedFile) WriteTo(w io.Writer) (n int64, err error) {
 		n, err = io.Copy(w, cf.r)
 	}
 	if err != nil {
-		err = errors.ErrorfWithCause(
-			err, "error writing cached file %v to %v",
-			cf, w,
+		err = fmt.Errorf(
+			"error writing cached file %v to %v: %w",
+			cf, w, err,
 		)
 	}
 	return
@@ -56,34 +57,35 @@ func (cf *cachedFile) Write(data []byte) (n int, err error) {
 	if cf.buf != nil && cf.buf.Len()+len(data) > cf.buf.Cap() {
 		f, err := os.CreateTemp("", "square9-cachedFile-")
 		if err != nil {
-			return 0, errors.ErrorfWithCause(
-				err, "failed to \"promote\" cachedFile from "+
-					"in-memory buffer to disk",
+			return 0, fmt.Errorf(
+				"failed to \"promote\" cachedFile from "+
+					"in-memory buffer to disk: %w",
+				err,
 			)
 		}
 		if _, err := io.Copy(f, cf.r); err != nil {
-			return 0, errors.CreateError(
-				f.Close(),
-				nil,
-				errors.ErrorfWithCause(
-					err, "failed to dump in-memory bufer "+
-						"to file %v",
-					f.Name(),
+			return 0, internal.MultiError(
+				fmt.Errorf(
+					"failed to dump in-memory "+
+						"buffer to file %v: %w",
+					f.Name(), err,
 				),
-				0,
+				internal.ErrorfIfNotNil(
+					"error closing %v: %w",
+					f.Name(), f.Close(),
+				),
 			)
 		}
-		if _, err := f.Seek(0, os.SEEK_SET); err != nil {
-			return 0, errors.CreateError(
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return 0, internal.MultiError(
 				f.Close(),
-				nil,
-				errors.ErrorfWithCause(
-					err, "failed to rewind cached file "+
-						"%v after copying in-memory "+
-						"buffer to it",
-					f.Name(),
+				fmt.Errorf(
+					"failed to rewind cached file "+
+						"%v after copying "+
+						"in-memory buffer to "+
+						"it: %w",
+					f.Name(), err,
 				),
-				0,
 			)
 		}
 		cf.r, cf.w = &cf.file, &cf.file
@@ -93,10 +95,10 @@ func (cf *cachedFile) Write(data []byte) (n int, err error) {
 		cf.file.f = f
 	}
 	if n, err = cf.w.Write(data); err != nil {
-		err = errors.ErrorfWithCause(
-			err, "error while writing from "+
-				"%[1]v (type: %[1]T)",
-			cf.w,
+		err = fmt.Errorf(
+			"error while writing from "+
+				"%[1]v (type: %[1]T): %w",
+			cf.w, err,
 		)
 	}
 	return
@@ -111,15 +113,15 @@ func (cf *cachedFile) Close() error {
 	}
 	if cf.file.f != nil {
 		if err := cf.file.f.Close(); err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to close cached file %v",
-				cf.file.f.Name(),
+			return fmt.Errorf(
+				"failed to close cached file %v: %w",
+				cf.file.f.Name(), err,
 			)
 		}
 		if err := os.Remove(cf.file.f.Name()); err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to delete temporary file %v",
-				cf.file.f.Name(),
+			return fmt.Errorf(
+				"failed to delete temporary file %v: %w",
+				cf.file.f.Name(), err,
 			)
 		}
 		cf.file.f = nil
@@ -138,16 +140,16 @@ func (cf *cachedFile) Reset() error {
 	if cf.file.f != nil {
 		cf.r, cf.w = &cf.file, &cf.file
 		if _, err := cf.file.f.Seek(0, os.SEEK_SET); err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to seek to beginning of cached "+
-					"file %v to truncate",
+			return fmt.Errorf(
+				"failed to seek to beginning of "+
+					"cached file %v to truncate",
 				cf.file.f.Name(),
 			)
 		}
 		if err := cf.file.f.Truncate(0); err != nil {
-			return errors.ErrorfWithCause(
-				err, "failed to truncate cached file %v",
-				cf.file.f.Name(),
+			return fmt.Errorf(
+				"failed to truncate cached file %v: %w",
+				cf.file.f.Name(), err,
 			)
 		}
 	}
@@ -243,26 +245,29 @@ func (bf *bufferFile) Write(data []byte) (n int, err error) {
 	var readPos int64
 	readPos, err = bf.f.Seek(0, os.SEEK_CUR)
 	if err != nil {
-		err = errors.ErrorfWithCause(
-			err, "failed to determine current buffer file offset",
+		err = fmt.Errorf(
+			"failed to determine current buffer file "+
+				"offset: %w", err,
 		)
 		return
 	}
 	if _, err = bf.f.Seek(0, os.SEEK_END); err != nil {
-		err = errors.ErrorfWithCause(
-			err, "failed to seek to end of buffer file for new write",
+		err = fmt.Errorf(
+			"failed to seek to end of buffer file for "+
+				"new write: %w", err,
 		)
 		return
 	}
 	if n, err = bf.f.Write(data); err != nil {
-		err = errors.ErrorfWithCause(
-			err, "failed to write to end of buffer file",
+		err = fmt.Errorf(
+			"failed to write to end of buffer file: %w", err,
 		)
 		return
 	}
 	if _, err = bf.f.Seek(readPos, os.SEEK_SET); err != nil {
-		err = errors.ErrorfWithCause(
-			err, "failed to restore file offset to read offset",
+		err = fmt.Errorf(
+			"failed to restore file offset to read "+
+				"offset: %w", err,
 		)
 	}
 	return
@@ -300,9 +305,9 @@ func determineContentType(r io.Reader) (io.Reader, string, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 512))
 	n, err := io.Copy(buf, io.LimitReader(r, 512))
 	if err != nil {
-		return nil, "", errors.ErrorfWithCause(
-			err, "failed to \"peek\" at %+v content",
-			r,
+		return nil, "", fmt.Errorf(
+			"failed to \"peek\" at %+v content: %w",
+			r, err,
 		)
 	}
 	logger.Verbose2("read %[1]d bytes from %#[2]v", n, r)

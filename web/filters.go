@@ -1,9 +1,8 @@
 package web
 
 import (
+	"fmt"
 	"reflect"
-
-	"github.com/skillian/errors"
 )
 
 // IDAndNamer is implemented by most metadata objects in the Square 9 API.
@@ -171,7 +170,7 @@ bLoop:
 // >1, log a warning but don't return an error.
 func expectOne(length int, ian IDAndNamer) error {
 	if length == 0 {
-		return errors.Errorf(
+		return fmt.Errorf(
 			"failed to get %T with name %q or ID %d",
 			ian, ian.Name(), ian.ID())
 	}
