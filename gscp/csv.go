@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
+	"github.com/skillian/curly"
 	"github.com/skillian/square9/internal"
 	"github.com/skillian/workers"
 )
@@ -20,7 +22,7 @@ type csvProcessor struct {
 	currentRowIndex      int64
 	reader               *csv.Reader
 	reqs                 chan csvReq
-	processingRowIndexes []int64
+	processingRowIndexes map[workers.WorkerID]*int64
 	fieldNames           []string
 	workerErrors         chan error
 	todoRowIndexes       []int64
@@ -40,7 +42,7 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 		currentRowIndex:      -1,
 		reader:               csv.NewReader(sourceFile),
 		reqs:                 make(chan csvReq, limit*3/2),
-		processingRowIndexes: make([]int64, limit),
+		processingRowIndexes: make(map[workers.WorkerID]*int64, limit),
 	}
 	if ctx, err = p.initWorkers(ctx, limit, config); err != nil {
 		return
@@ -58,7 +60,13 @@ func localCSVToDest2(ctx context.Context, source, dest *Spec, config *Config) (e
 
 func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Config) (ctx2 context.Context, err error) {
 	ctx2, cancel := context.WithCancel(ctx)
-	results := workers.Work(ctx2, p.reqs, func(ctx context.Context, id int, req csvReq) (struct{}, error) {
+	processingRowIndexesLock := &sync.Mutex{}
+	processingRowIndexes := make([]int64, limit)
+	results := workers.Work(ctx2, p.reqs, func(ctx context.Context, id workers.WorkerID, req csvReq) (struct{}, error) {
+		processingRowIndexesLock.Lock()
+		p.processingRowIndexes[id] = &processingRowIndexes[0]
+		processingRowIndexes = processingRowIndexes[1:]
+		processingRowIndexesLock.Unlock()
 		p.startRow(id, req.rowIndex)
 		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
 		if err == nil {
@@ -93,17 +101,17 @@ func (p *csvProcessor) loadProgress(source, dest *Spec) (err error) {
 	return nil
 }
 
-func (p *csvProcessor) startRow(workerID int, rowIndex int64) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], rowIndex)
+func (p *csvProcessor) startRow(workerID workers.WorkerID, rowIndex int64) {
+	atomic.StoreInt64(p.processingRowIndexes[workerID], rowIndex)
 }
 
-func (p *csvProcessor) doneRow(workerID int) {
-	atomic.StoreInt64(&p.processingRowIndexes[workerID-1], 0)
+func (p *csvProcessor) doneRow(workerID workers.WorkerID) {
+	atomic.StoreInt64(p.processingRowIndexes[workerID], 0)
 }
 
 func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error {
 	defer close(p.reqs)
-	if err := p.loadFieldNames(ctx, source); err != nil {
+	if err := p.loadFieldNames(source); err != nil {
 		return fmt.Errorf("loading field names: %w", err)
 	}
 	if err := p.processTodoRows(ctx, dest); err != nil {
@@ -123,7 +131,7 @@ func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error
 	}
 }
 
-func (p *csvProcessor) loadFieldNames(ctx context.Context, source *Spec) error {
+func (p *csvProcessor) loadFieldNames(source *Spec) error {
 	firstRow, err := p.readNextCSVRow()
 	if err != nil {
 		return err
@@ -219,8 +227,17 @@ func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, dest *Sp
 	return nil
 }
 
-func (p *csvProcessor) parseSpecFromRow(row []string) (*Spec, error) {
-	rowSpec, err := ParseSpec(row[len(row)-1])
+func (p *csvProcessor) parseSpecFromRow(row []string) (rowSpec *Spec, err error) {
+	specStr := row[len(row)-1]
+	if strings.ContainsRune(specStr, '{') {
+		if specStr, err = curly.Format(specStr, row); err != nil {
+			return nil, fmt.Errorf(
+				"formatting spec %s: %w",
+				row[len(row)-1], err,
+			)
+		}
+	}
+	rowSpec, err = ParseSpec(specStr)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to parse row filename "+
@@ -244,8 +261,10 @@ func (p *csvProcessor) saveProgress(processCSVErr error, source, dest *Spec) (er
 		return nil
 	}
 	pendingLineIndexes := make([]int64, len(p.processingRowIndexes))
-	for i := range p.processingRowIndexes {
-		pendingLineIndexes[i] = atomic.LoadInt64(&p.processingRowIndexes[i])
+	i := 0
+	for _, ptr := range p.processingRowIndexes {
+		pendingLineIndexes[i] = atomic.LoadInt64(ptr)
+		i++
 	}
 	return writeProgressForSpecs(indexProgress{
 		PendingLineIndexes: pendingLineIndexes,

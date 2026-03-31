@@ -156,15 +156,11 @@ field values.
 			signal.Stop(sigs)
 			w := os.Stderr
 			if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
-				logger.LogErr(
-					fmt.Errorf(
-						"failed to write "+
-							"goroutine "+
-							"profiles to "+
-							"%v: %w",
-						w, err,
-					),
-				)
+				logger.LogErr(fmt.Errorf(
+					"failed to write goroutine "+
+						"profiles to %v: %w",
+					w, err,
+				))
 			}
 		}()
 	}

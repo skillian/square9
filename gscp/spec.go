@@ -454,6 +454,9 @@ func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config
 
 func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	if source.Search == "" {
+		// TODO: Find out if this code ever gets triggered
+		// and remove it if not.
+		logger.Debug1("source.Search was not set in %s", source)
 		if pivot := strings.LastIndexByte(source.ArchivePath, '/'); pivot != -1 {
 			source.ArchivePath, source.Search = source.ArchivePath[:pivot], source.ArchivePath[pivot+1:]
 		} else {
@@ -466,6 +469,16 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 	client, err := getWebClientForSpec(ctx, source)
 	if err != nil {
 		return err
+	}
+	{
+		archiveDir := filepath.Dir(dest.ArchivePath)
+		if err := createDirIfNotExist(archiveDir); err != nil {
+			return fmt.Errorf(
+				"creating output index file directory "+
+					"%s: %w",
+				archiveDir, err,
+			)
+		}
 	}
 	f, err := func() (*os.File, error) {
 		if config.AppendIndex {
@@ -485,25 +498,12 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 	var exportDir string
 	if !config.IndexOnly {
 		exportDir = dest.ArchivePath[:len(dest.ArchivePath)-len(filepath.Ext(dest.ArchivePath))]
-		if _, err := os.Stat(exportDir); err != nil {
-			if os.IsNotExist(err) {
-				if err = os.MkdirAll(exportDir, 0750); err != nil {
-					return fmt.Errorf(
-						"failed to create "+
-							"export "+
-							"directory "+
-							"%v: %w",
-						exportDir, err,
-					)
-				}
-			} else {
-				return fmt.Errorf(
-					"failed to check if export "+
-						"directory %v exists: "+
-						"%w",
-					exportDir, err,
-				)
-			}
+		if err := createDirIfNotExist(exportDir); err != nil {
+			return fmt.Errorf(
+				"failed to create export directory "+
+					"%v: %w",
+				exportDir, err,
+			)
 		}
 	}
 	return client.Session(ctx, func(ctx context.Context, s *web.Session) error {
@@ -527,35 +527,44 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 				Value:  v,
 			})
 		}
-		fieldCount := len(flds)
+		fieldCount := len(flds) + 1 // document ID
 		if !config.IndexOnly {
 			fieldCount++ // for filename
 		}
 		fieldVals := make([]string, fieldCount)
+		fieldVals[0] = "Id"
 		for i, fld := range flds {
-			fieldVals[i] = fld.FieldName
+			fieldVals[i+1] = fld.FieldName
 		}
 		if err := csvWriter.Write(fieldVals); err != nil {
 			return fmt.Errorf("writing CSV header row: %w", err)
 		}
 		outputFilename := &fieldVals[len(fieldVals)-1]
+		storeDocument := func(
+			ctx context.Context, doc *web.Document,
+			outputFilename string, config *Config,
+		) (Err error) {
+			f, err := OpenFilenameCreate(outputFilename, config.AllowOverwrite)
+			if err != nil {
+				return err
+			}
+			defer internal.Catch(&Err, f.Close)
+			return s.Document(ctx, dbar.db, dbar.arch, doc, web.FileOption, f)
+		}
 		return iterateSearchResultsPages(
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
 			func(ctx context.Context, doc *web.Document) (Err error) {
+				docIDStr := strconv.FormatInt(doc.DocumentID, 10)
 				if !config.IndexOnly {
 					*outputFilename = filepath.Join(
 						exportDir,
-						strconv.FormatInt(doc.DocumentID, 10)+doc.FileType,
+						docIDStr+doc.FileType,
 					)
-					f, err := OpenFilenameCreate(*outputFilename, config.AllowOverwrite)
-					if err != nil {
-						return err
-					}
-					defer internal.Catch(&Err, f.Close)
-					if err := s.Document(ctx, dbar.db, dbar.arch, doc, web.FileOption, f); err != nil {
+					if err := storeDocument(ctx, doc, *outputFilename, config); err != nil {
 						return err
 					}
 				}
+				fieldVals[0] = docIDStr
 				for i, fld := range flds {
 					foundField := false
 					for _, docVal := range doc.Fields {
@@ -563,11 +572,11 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 							continue
 						}
 						foundField = true
-						fieldVals[i] = docVal.Value
+						fieldVals[i+1] = docVal.Value
 						break
 					}
 					if !foundField {
-						fieldVals[i] = ""
+						fieldVals[i+1] = ""
 					}
 				}
 
@@ -593,7 +602,7 @@ func iterateSearchResultsPages(
 	for i := 1; ; i++ {
 		res.Fields = res.Fields[:0]
 		res.Docs = res.Docs[:0]
-		options = append(options[:len(options)-1], web.Value("page", i))
+		options[len(options)-1] = web.Value("page", i)
 		err := s.Search(
 			ctx, d, a, search, criteria, &res,
 			options...,
@@ -753,7 +762,7 @@ func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
 
 func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config) error {
 	if sp.IsLocal() {
-		return readIntoLocalFile(ctx, r, sp.ArchivePath, config)
+		return readIntoLocalFile(r, sp.ArchivePath, config)
 	}
 	client, err := getWebClientForSpec(ctx, sp)
 	if err != nil {
@@ -764,7 +773,7 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config
 	})
 }
 
-func readIntoLocalFile(ctx context.Context, r io.Reader, filename string, config *Config) (Err error) {
+func readIntoLocalFile(r io.Reader, filename string, config *Config) (Err error) {
 	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
 	if err != nil {
 		return err
@@ -796,7 +805,7 @@ func readIntoDocument(ctx context.Context, s *web.Session, r io.Reader, sp *Spec
 				sp,
 			)
 		}
-		if err = deleteExistingDocuments(ctx, s, sp, dbar, config); err != nil {
+		if err = deleteExistingDocuments(ctx, s, sp, dbar); err != nil {
 			return err
 		}
 	}
@@ -813,7 +822,7 @@ var errSearchRequired = errors.New("search is required")
 // specification.  sp must have its Search field filled in and that
 // search's prompts are filled in with sp's Fields and if only one
 // document is returned that matches, it is deleted.
-func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar dbArch, config *Config) error {
+func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar dbArch) error {
 	if sp.Search == "" {
 		return fmt.Errorf(
 			"%w: cannot delete documents without a search",

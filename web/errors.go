@@ -12,9 +12,9 @@ var (
 )
 
 func errRequired(what string) error {
-	return fmt.Errorf(what + " is required and cannot be nil/zero")
+	return fmt.Errorf("%s is required and cannot be nil/zero", what)
 }
 
 func errRedefined(what string) error {
-	return fmt.Errorf("redefinition of " + what)
+	return fmt.Errorf("redefinition of %s", what)
 }
