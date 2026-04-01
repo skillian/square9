@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +25,8 @@ import (
 var logger = logging.GetLogger("square9")
 
 const defaultAPIPath = "square9api/api"
+
+type SpecFields map[string]string
 
 // Spec is a specification for a gscp source or destination.  Either
 // of which could be a local file or a gscp "pseudo-URI."
@@ -58,7 +62,7 @@ type Spec struct {
 	// Fields holds a collection of GlobalSearch fields for
 	// destination specifications or search prompts for source
 	// specifications.
-	Fields map[string]string
+	Fields SpecFields
 }
 
 // SpecKind defines the kind of item a Spec refers to.
@@ -239,30 +243,94 @@ func parseQueryIntoFields(s string) (map[string]string, error) {
 	return fs, nil
 }
 
+type SpecComponent struct {
+	Field any
+	Get   func(*Spec) any
+	Set   func(*Spec, any)
+}
+
+// Components returns an iterator over the components of the Spec.
+func (sp *Spec) Components() iter.Seq[SpecComponent] {
+	return func(yield func(SpecComponent) bool) {
+		if !yield(SpecComponent{
+			&sp.Username,
+			func(sp *Spec) any { return sp.Username },
+			func(sp *Spec, v any) { sp.Username = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.Password,
+			func(sp *Spec) any { return sp.Password },
+			func(sp *Spec, v any) { sp.Password = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.Hostname,
+			func(sp *Spec) any { return sp.Hostname },
+			func(sp *Spec, v any) { sp.Hostname = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.APIPath,
+			func(sp *Spec) any { return sp.APIPath },
+			func(sp *Spec, v any) { sp.APIPath = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.Database,
+			func(sp *Spec) any { return sp.Database },
+			func(sp *Spec, v any) { sp.Database = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.ArchivePath,
+			func(sp *Spec) any { return sp.ArchivePath },
+			func(sp *Spec, v any) { sp.ArchivePath = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.Search,
+			func(sp *Spec) any { return sp.Search },
+			func(sp *Spec, v any) { sp.Search = v.(string) },
+		}) {
+			return
+		}
+		if !yield(SpecComponent{
+			&sp.Fields,
+			func(sp *Spec) any { return sp.Fields },
+			func(sp *Spec, v any) { sp.Fields = v.(SpecFields) },
+		}) {
+			return
+		}
+	}
+}
+
 // IsLocal returns true if the specification is a local file specification
 func (sp *Spec) IsLocal() bool { return sp.Kind.HasAll(LocalSpec) }
 
 // Eq checks if two Specs are equal.
 func (sp *Spec) Eq(b *Spec) bool {
-	scalars := func(sp *Spec) [7]string {
-		return [...]string{
-			sp.Username, sp.Password, sp.Hostname,
-			sp.APIPath, sp.Database, sp.ArchivePath,
-			sp.Search,
-		}
-	}
-	if scalars(sp) != scalars(b) {
-		return false
-	}
-	if len(sp.Fields) != len(b.Fields) {
-		return false
-	}
-	for k, v := range sp.Fields {
-		v2, ok := b.Fields[k]
-		if !ok {
-			return false
-		}
-		if v != v2 {
+	for component := range sp.Components() {
+		left := component.Get(sp)
+		right := component.Get(b)
+		if leftFields, ok := left.(SpecFields); ok {
+			rightFields := right.(SpecFields)
+			if len(leftFields) != len(rightFields) {
+				return false
+			}
+			for k, v := range leftFields {
+				w, ok := rightFields[k]
+				if !ok || v != w {
+					return false
+				}
+			}
+		} else if left != right {
 			return false
 		}
 	}
@@ -274,9 +342,7 @@ func (sp *Spec) Copy(changes ...func(*Spec)) *Spec {
 	sp2 := &Spec{}
 	*sp2 = *sp
 	sp2.Fields = make(map[string]string, len(sp.Fields))
-	for k, v := range sp.Fields {
-		sp2.Fields[k] = v
-	}
+	maps.Copy(sp2.Fields, sp.Fields)
 	for _, change := range changes {
 		change(sp2)
 	}
@@ -464,8 +530,6 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			source.ArchivePath, source.Search = "", source.ArchivePath
 		}
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	client, err := getWebClientForSpec(ctx, source)
 	if err != nil {
 		return err
@@ -535,6 +599,9 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		fieldVals[0] = "Id"
 		for i, fld := range flds {
 			fieldVals[i+1] = fld.FieldName
+		}
+		if !config.IndexOnly {
+			fieldVals[len(fieldVals)-1] = "Filename"
 		}
 		if err := csvWriter.Write(fieldVals); err != nil {
 			return fmt.Errorf("writing CSV header row: %w", err)

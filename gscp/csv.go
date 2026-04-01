@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,8 +65,10 @@ func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Confi
 	processingRowIndexes := make([]int64, limit)
 	results := workers.Work(ctx2, p.reqs, func(ctx context.Context, id workers.WorkerID, req csvReq) (struct{}, error) {
 		processingRowIndexesLock.Lock()
-		p.processingRowIndexes[id] = &processingRowIndexes[0]
-		processingRowIndexes = processingRowIndexes[1:]
+		if _, ok := p.processingRowIndexes[id]; !ok {
+			p.processingRowIndexes[id] = &processingRowIndexes[0]
+			processingRowIndexes = processingRowIndexes[1:]
+		}
 		processingRowIndexesLock.Unlock()
 		p.startRow(id, req.rowIndex)
 		err := CopyFromSourceToDestSpec(ctx, req.rowSpec, req.rowDestSpec, config)
@@ -204,7 +207,7 @@ func (p *csvProcessor) readNextCSVRow() ([]string, error) {
 }
 
 func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, dest *Spec) error {
-	rowSource, err := p.parseSpecFromRow(row)
+	rowSource, err := parseSpecFromRow(row)
 	if err != nil {
 		return err
 	}
@@ -227,23 +230,58 @@ func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, dest *Sp
 	return nil
 }
 
-func (p *csvProcessor) parseSpecFromRow(row []string) (rowSpec *Spec, err error) {
+func parseSpecFromRow(row []string) (rowSpec *Spec, err error) {
 	specStr := row[len(row)-1]
-	if strings.ContainsRune(specStr, '{') {
-		if specStr, err = curly.Format(specStr, row); err != nil {
-			return nil, fmt.Errorf(
-				"formatting spec %s: %w",
-				row[len(row)-1], err,
-			)
-		}
-	}
 	rowSpec, err = ParseSpec(specStr)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to parse row filename "+
 				"%v as spec: %w",
-			row[len(row)-1], err,
+			specStr, err,
 		)
+	}
+	return updateParseSpecFromRow(rowSpec, row)
+}
+
+func updateParseSpecFromRow(rowSpec *Spec, row []string) (*Spec, error) {
+	for comp := range rowSpec.Components() {
+		s := comp.Get(rowSpec)
+		switch s := s.(type) {
+		case string:
+			if !strings.ContainsRune(s, '{') {
+				continue
+			}
+			s2, err := curly.Format(s, row)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"formatting spec %s: %w",
+					s, err,
+				)
+			}
+			comp.Set(rowSpec, s2)
+		case SpecFields:
+			var s2 SpecFields
+			for k, v := range s {
+				if !strings.ContainsRune(v, '{') {
+					continue
+				}
+				v, err := curly.Format(v, row)
+				if err != nil {
+					return nil, fmt.Errorf(
+						"formatting spec field %s: %w",
+						v, err,
+					)
+				}
+				if s2 == nil {
+					s2 = make(SpecFields, len(s))
+					maps.Copy(s2, s)
+				}
+				s2[k] = v
+			}
+			if s2 != nil {
+				comp.Set(rowSpec, s2)
+			}
+		}
 	}
 	return rowSpec, nil
 }

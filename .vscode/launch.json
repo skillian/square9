@@ -13,10 +13,10 @@
 			"args": [
 				"--from-index",
 				"--to-index",
-				"--log-console", "warn",
+				"--log-console", "verbose",
 				"--web-session-pool-limit", "4",
-				"gscp://TenantAdmin@lancorow.mysquare9.com:ROW_PROD/ROW_OC_Probate/Browse ROW_OC_Probate",
-				"E:\\square9\\LancoROW\\ROW_OC_Probate.csv"
+				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate_w_specs.csv",
+				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate_Exported.csv"
 			]
 		}
 
