@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 
 	"github.com/skillian/argparse"
+	"github.com/skillian/curly"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/gscp"
 )
@@ -54,29 +55,20 @@ field values.
 `,
 		),
 	)
-	var config gscp.MainConfig
+	config := gscp.MainConfig{
+		Config: gscp.Config{
+			LocalOutputFilenameFormatter: gscp.DefaultLocalOutputFilenameFormatter,
+		},
+	}
 	parser.MustAddArgument(
-		argparse.OptionStrings("--web-session-pool-limit"),
-		argparse.ActionFunc(argparse.Store),
-		argparse.Type(argparse.Int),
+		argparse.OptionStrings("--disable-raw-terminal"),
+		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
-			"specify a session limit for the web session "+
-				"pool.  By default, only one session "+
-				"is used at a time, but specifying "+
-				"this option allows multiple requests "+
-				"to execute concurrently",
+			"disable raw access to the terminal.  "+
+				"Responses to prompts for credentials "+
+				"will be unobscured.",
 		),
-	).MustBind(&config.Config.WebSessionPoolLimit)
-	var consoleLogLevel string
-	parser.MustAddArgument(
-		argparse.OptionStrings("--log-console"),
-		argparse.MetaVar("LOG_LEVEL"),
-		argparse.ActionFunc(argparse.Store),
-		argparse.Help(
-			"enable logging for the console at the "+
-				"given level",
-		),
-	).MustBind(&consoleLogLevel)
+	).MustBind(&config.Config.DisableTerminalRawMode)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--from-index"),
 		argparse.ActionFunc(argparse.StoreTrue),
@@ -103,6 +95,29 @@ field values.
 		),
 	).MustBind(&config.Config.IndexOnly)
 	parser.MustAddArgument(
+		argparse.OptionStrings("--local-output-filename-format"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Type(func(v string) (interface{}, error) {
+			return curly.NewFormatter(v, ([]string)(nil))
+		}),
+		argparse.Help(
+			"When the source is a local index file whose "+
+				"filenames are gscp:// pseudo-URIs, "+
+				"use this format to name the local "+
+				"output filenames",
+		),
+	).MustBind(&config.Config.LocalOutputFilenameFormatter)
+	var consoleLogLevel string
+	parser.MustAddArgument(
+		argparse.OptionStrings("--log-console"),
+		argparse.MetaVar("LOG_LEVEL"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Help(
+			"enable logging for the console at the "+
+				"given level",
+		),
+	).MustBind(&consoleLogLevel)
+	parser.MustAddArgument(
 		argparse.OptionStrings("--overwrite"),
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
@@ -126,6 +141,18 @@ field values.
 				"certainly a very bad idea.",
 		),
 	).MustBind(&config.Config.Unsecure)
+	parser.MustAddArgument(
+		argparse.OptionStrings("--web-session-pool-limit"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Type(argparse.Int),
+		argparse.Help(
+			"specify a session limit for the web session "+
+				"pool.  By default, only one session "+
+				"is used at a time, but specifying "+
+				"this option allows multiple requests "+
+				"to execute concurrently",
+		),
+	).MustBind(&config.Config.WebSessionPoolLimit)
 	parser.MustAddArgument(
 		argparse.Dest("source"),
 		argparse.MetaVar("SOURCE"),

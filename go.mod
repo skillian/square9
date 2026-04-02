@@ -11,7 +11,7 @@ require (
 	github.com/skillian/curly v0.0.0-20220322100528-cd8fa922ce27
 	github.com/skillian/errors v0.0.0-20250827231644-5bd01b1010e4
 	github.com/skillian/interactivity v0.0.0-20210425124543-4b3b9b919a80
-	github.com/skillian/logging v0.0.0-20251014150930-a22b20791619
+	github.com/skillian/logging v0.0.0-20260401170110-2c577ba87864
 	github.com/skillian/workers v0.0.0-20241216131054-f9ff915acb84
 )
 

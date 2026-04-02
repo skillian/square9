@@ -21,6 +21,8 @@ github.com/skillian/expr v0.0.0-20220215084646-3e36fbdc1ffd/go.mod h1:uYOe6qpjdh
 github.com/skillian/logging v0.0.0-20210406222847-057884e2cfcc/go.mod h1:MxKXgvk9U5UDmT8/EoMuCS/cyzbN63imvi8t2tV/Tbw=
 github.com/skillian/logging v0.0.0-20251014150930-a22b20791619 h1:MszIAzzG4oAgjYapZ7lSCIGF4G3AjOzsfQ4U0DSV3v0=
 github.com/skillian/logging v0.0.0-20251014150930-a22b20791619/go.mod h1:Y1U7vurhTQ6SH8rBhKixGuFW7983XoROkSBf0p+Pht4=
+github.com/skillian/logging v0.0.0-20260401170110-2c577ba87864 h1:C3mFDdN2fTJVNanXaDlIfz4pnmZNcqsPQqIlV8lLXPQ=
+github.com/skillian/logging v0.0.0-20260401170110-2c577ba87864/go.mod h1:Y1U7vurhTQ6SH8rBhKixGuFW7983XoROkSBf0p+Pht4=
 github.com/skillian/textwrap v0.0.0-20190707153458-15c7ee8d44ed h1:xhCPmqeLR4IjYWdWs+VIzr31yafTBIXNI4Lc7L80K4Q=
 github.com/skillian/textwrap v0.0.0-20190707153458-15c7ee8d44ed/go.mod h1:t2cRD2QQ88ZnCRMNPMwH80Y3GgNOMhrcfjIXnfzolAM=
 github.com/skillian/unsafereflect v0.0.0-20251014144419-48a60b7ed003 h1:8GGPeCzTMRfrG5b90y5JEjNP8hIaIgxRnnMKjvYpUVY=

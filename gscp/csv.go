@@ -349,7 +349,7 @@ func readProgressForSpecs(source, dest *Spec) (p indexProgress, err error) {
 
 func writeProgressForSpecs(p indexProgress, source, dest *Spec) (err error) {
 	filename := progressFilenameForSpecs(source, dest)
-	f, err := OpenFilenameCreate(filename, true)
+	f, err := CreateLockedFile(filename, true)
 	if err != nil {
 		return fmt.Errorf("failed to open progress file: %w", err)
 	}
