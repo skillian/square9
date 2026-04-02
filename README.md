@@ -1,11 +1,12 @@
+Upload files into GlobalSearch archives as documents or download search results
+as files.
+
+```
 usage: gscp.exe [ --disable-raw-terminal ] [ --from-index ] [ --index-only ]
                 [ --local-output-filename-format LOCALOUTPUTFILENAMEFORMAT ]
                 [ --log-console LOG_LEVEL ] [ --overwrite ] [ --to-index ]
                 [ --unsecure ] [ --web-session-pool-limit WEBSESSIONPOOLLIMIT ]
                 SOURCE DEST
-
-Upload files into GlobalSearch archives as documents or download search results
-as files.
 
 positional arguments:
   source        source specification
@@ -37,16 +38,16 @@ optional arguments:
                 specify a session limit for the web session pool.  By default,
                 only one session is used at a time, but specifying this option
                 allows multiple requests to execute concurrently
-
+```
 
 A specification can be one of the following:
-        1. A filesystem path (on the local computer or a network
-           location)
-        2. A gscp pseudo-URI.
+1. A filesystem path (on the local computer or a network location)
+2. A gscp pseudo-URI.
 
 A gscp pseudo-URI is meant to resemble a remote host specification like
 in scp and has the following format:
 
+```
   [gscp://][username@]hostname[/api-path]:database[/archive[/sub-archive ...]]
 
 where:
@@ -60,6 +61,7 @@ where:
         database:       The name of the GlobalSearch database.
         archive:        The name of the GlobalSearch archive.
         sub-archive:    Optional sub archive(s)
+```
 
 A gscp pseudo-URI can have query parameters starting with a question
 mark ("?") and separated by ampersands ("&").  When a gscp pseudo-URI
