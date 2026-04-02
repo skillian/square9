@@ -13,11 +13,13 @@
 			"args": [
 				"--from-index",
 				"--to-index",
-				"--log-console", "verbose",
+				"--local-output-filename-format", "ROW_OC_Probate - {1} - {0}",
+				"--disable-raw-terminal",
 				"--web-session-pool-limit", "4",
 				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate_w_specs.csv",
 				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate_Exported.csv"
-			]
+			],
+			"console": "integratedTerminal"
 		}
 
 	]

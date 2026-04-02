@@ -403,7 +403,7 @@ const (
 
 type Config struct {
 	// LocalFileOutputFormat specifies an
-	LocalFileOutputFormatter curly.Formatter
+	LocalOutputFilenameFormatter curly.Formatter
 
 	// WebSessionPoolLimit defines the number of sessions to limit
 	// the pool to.
@@ -425,9 +425,14 @@ type Config struct {
 	// SSL configured.  Do not use this for test or production
 	// systems.
 	Unsecure bool
+
+	// DisableTerminalRawMode is only for terminals that
+	// github.com/skillian/interactivity.ConsoleAsker fails to
+	// set into raw mode.
+	DisableTerminalRawMode bool
 }
 
-var DefaultLocalFileOutputFormatter = func() curly.Formatter {
+var DefaultLocalOutputFilenameFormatter = func() curly.Formatter {
 	fr, err := curly.NewFormatter("{0}", ([]string)(nil))
 	if err != nil {
 		panic(fmt.Sprintf(
@@ -448,12 +453,12 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	localSource, localDest := source.IsLocal(), dest.IsLocal()
 	var sourceClient, destClient web.Client
 	if !localSource {
-		if sourceClient, Err = getWebClientForSpec(ctx, source); Err != nil {
+		if sourceClient, Err = getWebClientForSpec(ctx, source, config); Err != nil {
 			Err = fmt.Errorf("getting source client: %w", Err)
 		}
 	}
 	if Err == nil && !localDest {
-		if destClient, Err = getWebClientForSpec(ctx, dest); Err != nil {
+		if destClient, Err = getWebClientForSpec(ctx, dest, config); Err != nil {
 			Err = fmt.Errorf("getting destination client: %w", Err)
 		}
 	}
@@ -470,8 +475,32 @@ func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *C
 	}
 	switch {
 	case localSource && source.Kind.HasAll(IndexSpec):
-		if dest.Kind.HasAll(IndexSpec) {
-			config.AppendIndex = true
+		if dest.Kind.HasAll(LocalSpec | IndexSpec) {
+			// Open a LockedFile of the index here so that
+			// nested calls to (re)open the locked file
+			// keep reusing this shared one instead of
+			// constantly opening and closing it:
+			rootHandle, err := func() (*LockedFile, error) {
+				if config.AppendIndex {
+					return OpenLockedFileAppend(dest.ArchivePath)
+				}
+				return CreateLockedFile(dest.ArchivePath, config.AllowOverwrite)
+			}()
+			if err != nil {
+				return fmt.Errorf(
+					"failed to open root index file %s: %w",
+					dest.ArchivePath, err,
+				)
+			}
+			defer internal.Catch(&Err, func() error {
+				if err := rootHandle.Close(); err != nil {
+					return fmt.Errorf(
+						"closing root file handle: %w",
+						err,
+					)
+				}
+				return nil
+			})
 		}
 		return localCSVToDest2(ctx, source, dest, config)
 	case localSource && localDest:
@@ -536,14 +565,11 @@ func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config
 		return err
 	}
 	defer internal.Catch(&Err, destFile.Close)
-	return WriteSpecTo(ctx, source, destFile)
+	return WriteSpecTo(ctx, source, destFile, config)
 }
 
 func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
 	if source.Search == "" {
-		// TODO: Find out if this code ever gets triggered
-		// and remove it if not.
-		logger.Debug1("source.Search was not set in %s", source)
 		if pivot := strings.LastIndexByte(source.ArchivePath, '/'); pivot != -1 {
 			source.ArchivePath, source.Search = source.ArchivePath[:pivot], source.ArchivePath[pivot+1:]
 		} else {
@@ -551,7 +577,7 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			source.ArchivePath, source.Search = "", source.ArchivePath
 		}
 	}
-	client, err := getWebClientForSpec(ctx, source)
+	client, err := getWebClientForSpec(ctx, source, config)
 	if err != nil {
 		return err
 	}
@@ -656,17 +682,7 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		return iterateSearchResultsPages(
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
 			func(ctx context.Context, doc *web.Document) (Err error) {
-				docIDStr := strconv.FormatInt(doc.DocumentID, 10)
-				if !config.IndexOnly {
-					*outputFilename = filepath.Join(
-						exportDir,
-						docIDStr+doc.FileType,
-					)
-					if err := storeDocument(ctx, doc, *outputFilename, config); err != nil {
-						return err
-					}
-				}
-				fieldVals[0] = docIDStr
+				fieldVals[0] = strconv.FormatInt(doc.DocumentID, 10)
 				for i, fld := range flds {
 					foundField := false
 					for _, docVal := range doc.Fields {
@@ -681,7 +697,22 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 						fieldVals[i+1] = ""
 					}
 				}
-
+				if !config.IndexOnly {
+					*outputFilename, err = config.LocalOutputFilenameFormatter.Format(fieldVals)
+					if err != nil {
+						return fmt.Errorf(
+							"formatting local output filename: %w",
+							err,
+						)
+					}
+					*outputFilename = filepath.Join(
+						exportDir,
+						*outputFilename+doc.FileType,
+					)
+					if err := storeDocument(ctx, doc, *outputFilename, config); err != nil {
+						return err
+					}
+				}
 				return csvWriter.Write(fieldVals)
 			},
 		)
@@ -771,15 +802,15 @@ var errClientMapNotFound = errors.New("web client map not found in context")
 
 // getWebClientForSpec retrieves a web.Client from the context
 // for the given Spec.
-func getWebClientForSpec(ctx context.Context, sp *Spec) (web.Client, error) {
+func getWebClientForSpec(ctx context.Context, sp *Spec, config *Config) (web.Client, error) {
 	wcm, err := webClientMapFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return wcm.getOrCreate(ctx, sp), nil
+	return wcm.getOrCreate(ctx, sp, config), nil
 }
 
-func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec) web.Client {
+func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec, config *Config) web.Client {
 	k := createWebClientKeyFromSpec(sp)
 	var root *webClientMap
 	for m := m; m != nil; m = m.prev {
@@ -791,7 +822,7 @@ func (m *webClientMap) getOrCreate(ctx context.Context, sp *Spec) web.Client {
 			return v
 		}
 	}
-	pool := createWebSessionsFromSpec(ctx, sp)
+	pool := createWebSessionsFromSpec(ctx, sp, config)
 	root.mu.Lock()
 	v, loaded := root.m[k]
 	if loaded {
@@ -813,7 +844,7 @@ func createWebClientKeyFromSpec(sp *Spec) webClientKey {
 
 type WebSessionPoolLimit struct{}
 
-func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
+func createWebSessionsFromSpec(ctx context.Context, sp *Spec, config *Config) *web.SessionPool {
 	scheme := "https"
 	if sp.Kind.HasAll(UnsecureSpec) {
 		scheme = scheme[:4]
@@ -822,24 +853,34 @@ func createWebSessionsFromSpec(ctx context.Context, sp *Spec) *web.SessionPool {
 	if v, ok := ctx.Value((*WebSessionPoolLimit)(nil)).(int); ok {
 		limit = v
 	}
+	sharedState := struct {
+		mu       sync.Mutex
+		password string
+	}{}
 	return web.NewSessionPool(limit, func(ctx context.Context) (s *web.Session, err error) {
 		if sp.Password == "" {
-			if asker, ok := ctx.Value((*interactivity.Asker)(nil)).(interactivity.Asker); ok {
-				sp.Password, err = interactivity.Ask(
-					ctx, asker,
-					fmt.Sprintf(
-						"Password for %s username %s: ",
-						sp.String(), sp.Username,
-					),
-					interactivity.IsSecret(true),
-				)
-				if err != nil {
-					return nil, fmt.Errorf(
-						"failed to get %s %v password: %w",
-						sp, sp, err,
+			sharedState.mu.Lock()
+			if sharedState.password == "" {
+				if asker, ok := interactivity.AskerFromContext(ctx); ok {
+					sharedState.password, err = interactivity.Ask(
+						ctx, asker,
+						fmt.Sprintf(
+							"Password for %s username %s: ",
+							sp.String(), sp.Username,
+						),
+						interactivity.IsSecret(!config.DisableTerminalRawMode),
 					)
+					if err != nil {
+						sharedState.mu.Unlock()
+						return nil, fmt.Errorf(
+							"failed to get %s %v password: %w",
+							sp, sp, err,
+						)
+					}
 				}
 			}
+			sp.Password = sharedState.password
+			sharedState.mu.Unlock()
 		}
 		if sp.Password == "" {
 			return nil, fmt.Errorf(
@@ -866,7 +907,7 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config
 	if sp.IsLocal() {
 		return readIntoLocalFile(r, sp.ArchivePath, config)
 	}
-	client, err := getWebClientForSpec(ctx, sp)
+	client, err := getWebClientForSpec(ctx, sp, config)
 	if err != nil {
 		return err
 	}
@@ -977,11 +1018,11 @@ func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar
 	return nil
 }
 
-func WriteSpecTo(ctx context.Context, sp *Spec, w io.Writer) error {
+func WriteSpecTo(ctx context.Context, sp *Spec, w io.Writer, config *Config) error {
 	if sp.IsLocal() {
 		return writeLocalFileTo(ctx, sp.ArchivePath, w)
 	}
-	client, err := getWebClientForSpec(ctx, sp)
+	client, err := getWebClientForSpec(ctx, sp, config)
 	if err != nil {
 		return err
 	}
@@ -1072,49 +1113,4 @@ func getDBArch(ctx context.Context, s *web.Session, sp *Spec) (dbar dbArch, err 
 		)
 	}
 	return dbArch{db: &dbs[0], arch: &ars[0]}, nil
-}
-
-// getFieldNamesForSourceSpec figures out the ordered list of field
-// names for the source specification.  If the source specification
-// has a fieldlist parameter, that field list is used.  Otherwise,
-// we use the field list of the source or destination GlobalSearch
-// archive.
-func getFieldNamesForSourceSpec(ctx context.Context, source, dest *Spec) ([]string, error) {
-	if fieldList, ok := source.Fields[FieldNameListKey]; ok {
-		return strings.Split(fieldList, FieldNameListSep), nil
-	}
-	clientSpec := source
-	if source.IsLocal() {
-		clientSpec = dest
-	}
-	archiveName, ok := source.Fields[ArchiveNameKey]
-	if !ok {
-		archiveName = clientSpec.ArchivePath
-	}
-	wc, err := getWebClientForSpec(ctx, clientSpec)
-	if err != nil {
-		return nil, err
-	}
-	var fieldNames []string
-	if err = wc.Session(ctx, func(ctx context.Context, s *web.Session) error {
-		fieldSpec := new(Spec)
-		*fieldSpec = *clientSpec
-		fieldSpec.ArchivePath = archiveName
-		dbar, err := getDBArch(ctx, s, fieldSpec)
-		if err != nil {
-			return err
-		}
-		fs, err := s.Fields(ctx, dbar.db, dbar.arch, nil)
-		if err != nil {
-			return err
-		}
-		fieldNames = make([]string, len(fs))
-		for i, f := range fs {
-			fieldNames[i] = f.FieldName
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	return fieldNames, nil
 }

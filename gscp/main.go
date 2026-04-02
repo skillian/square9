@@ -30,11 +30,15 @@ func Main(ctx context.Context, config MainConfig) error {
 		unsecure: config.Config.Unsecure,
 	}
 	ctx, asker := ensureAskerInContext(ctx)
-	source, err := parseSpecInfoAndEnsurePassword(ctx, sourceInfo, "source", asker)
+	source, err := parseSpecInfoAndEnsurePassword(
+		ctx, sourceInfo, "source", asker, &config.Config,
+	)
 	if err != nil {
 		return err
 	}
-	dest, err := parseSpecInfoAndEnsurePassword(ctx, destInfo, "dest", asker)
+	dest, err := parseSpecInfoAndEnsurePassword(
+		ctx, destInfo, "dest", asker, &config.Config,
+	)
 	if err != nil {
 		return err
 	}
@@ -78,12 +82,15 @@ func parseSpecInfo(si specInfo) (*Spec, error) {
 	return sp, nil
 }
 
-func parseSpecInfoAndEnsurePassword(ctx context.Context, si specInfo, specDesc string, asker interactivity.Asker) (*Spec, error) {
+func parseSpecInfoAndEnsurePassword(
+	ctx context.Context, si specInfo, specDesc string,
+	asker interactivity.Asker, config *Config,
+) (*Spec, error) {
 	sp, err := parseSpecInfo(si)
 	if err != nil {
 		return nil, err
 	}
-	if err = ensureSpecPassword(ctx, asker, sp, specDesc); err != nil {
+	if err = ensureSpecPassword(ctx, asker, sp, specDesc, config); err != nil {
 		return nil, err
 	}
 	return sp, nil
@@ -100,7 +107,10 @@ func ensureAskerInContext(ctx context.Context) (context.Context, interactivity.A
 	return ctx, asker
 }
 
-func ensureSpecPassword(ctx context.Context, asker interactivity.Asker, sp *Spec, specDesc string) (err error) {
+func ensureSpecPassword(
+	ctx context.Context, asker interactivity.Asker, sp *Spec,
+	specDesc string, config *Config,
+) (err error) {
 	if sp.IsLocal() || sp.Password != "" {
 		return nil
 	}
@@ -110,7 +120,7 @@ func ensureSpecPassword(ctx context.Context, asker interactivity.Asker, sp *Spec
 			"Password for %s username %s: ",
 			specDesc, sp.Username,
 		),
-		interactivity.IsSecret(true),
+		interactivity.IsSecret(!config.DisableTerminalRawMode),
 	)
 	if err != nil {
 		return fmt.Errorf(
