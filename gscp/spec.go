@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/skillian/curly"
 	"github.com/skillian/interactivity"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/internal"
@@ -393,7 +394,21 @@ func (sp *Spec) createString(includePassword bool) string {
 	return sb.String()
 }
 
+const (
+	indexOnly = 1 << iota
+	appendIndex
+	allowOverwrite
+	unsecure
+)
+
 type Config struct {
+	// LocalFileOutputFormat specifies an
+	LocalFileOutputFormatter curly.Formatter
+
+	// WebSessionPoolLimit defines the number of sessions to limit
+	// the pool to.
+	WebSessionPoolLimit int
+
 	// IndexOnly will not export documents when the destination is
 	// an index file; it will only export the CSV.
 	IndexOnly bool
@@ -410,15 +425,21 @@ type Config struct {
 	// SSL configured.  Do not use this for test or production
 	// systems.
 	Unsecure bool
-
-	// WebSessionPoolLimit defines the number of sessions to limit
-	// the pool to.
-	WebSessionPoolLimit int
 }
 
+var DefaultLocalFileOutputFormatter = func() curly.Formatter {
+	fr, err := curly.NewFormatter("{0}", ([]string)(nil))
+	if err != nil {
+		panic(fmt.Sprintf(
+			"initializing default local file output formatter: %v",
+			err,
+		))
+	}
+	return fr
+}()
+
 var errRemoteToRemoteNotSupported = errors.New(
-	"copying from a remote source to a remote destination " +
-		"is not yet supported",
+	"copying from a remote source to a remote destination is not yet supported",
 )
 
 func CopyFromSourceToDestSpec(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
@@ -472,7 +493,7 @@ func localCopy(ctx context.Context, source, dest *Spec, config *Config) (Err err
 		return err
 	}
 	defer internal.Catch(&Err, sourceFile.Close)
-	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	destFile, err := CreateLockedFile(dest.ArchivePath, config.AllowOverwrite)
 	if err != nil {
 		return err
 	}
@@ -510,7 +531,7 @@ func remoteToLocal(ctx context.Context, source, dest *Spec, config *Config) erro
 }
 
 func singleRemoteToLocal(ctx context.Context, source, dest *Spec, config *Config) (Err error) {
-	destFile, err := OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+	destFile, err := CreateLockedFile(dest.ArchivePath, config.AllowOverwrite)
 	if err != nil {
 		return err
 	}
@@ -544,11 +565,11 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			)
 		}
 	}
-	f, err := func() (*os.File, error) {
+	f, err := func() (*LockedFile, error) {
 		if config.AppendIndex {
-			return OpenFilenameAppend(dest.ArchivePath)
+			return OpenLockedFileAppend(dest.ArchivePath)
 		}
-		return OpenFilenameCreate(dest.ArchivePath, config.AllowOverwrite)
+		return CreateLockedFile(dest.ArchivePath, config.AllowOverwrite)
 	}()
 	if err != nil {
 		return err
@@ -603,15 +624,29 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		if !config.IndexOnly {
 			fieldVals[len(fieldVals)-1] = "Filename"
 		}
-		if err := csvWriter.Write(fieldVals); err != nil {
-			return fmt.Errorf("writing CSV header row: %w", err)
+		if err := f.WithLock(func(f *os.File) error {
+			st, err := f.Stat()
+			if err != nil {
+				return fmt.Errorf(
+					"stating CSV file %s: %w",
+					f.Name(), err,
+				)
+			}
+			if st.Size() == 0 {
+				if err := csvWriter.Write(fieldVals); err != nil {
+					return fmt.Errorf("writing CSV header row: %w", err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		outputFilename := &fieldVals[len(fieldVals)-1]
 		storeDocument := func(
 			ctx context.Context, doc *web.Document,
 			outputFilename string, config *Config,
 		) (Err error) {
-			f, err := OpenFilenameCreate(outputFilename, config.AllowOverwrite)
+			f, err := CreateLockedFile(outputFilename, config.AllowOverwrite)
 			if err != nil {
 				return err
 			}
@@ -841,7 +876,7 @@ func ReadIntoSpecFrom(ctx context.Context, r io.Reader, sp *Spec, config *Config
 }
 
 func readIntoLocalFile(r io.Reader, filename string, config *Config) (Err error) {
-	f, err := OpenFilenameCreate(filename, config.AllowOverwrite)
+	f, err := CreateLockedFile(filename, config.AllowOverwrite)
 	if err != nil {
 		return err
 	}

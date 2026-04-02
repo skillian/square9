@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 
 	"github.com/skillian/argparse"
+	"github.com/skillian/curly"
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/gscp"
 )
@@ -54,7 +55,11 @@ field values.
 `,
 		),
 	)
-	var config gscp.MainConfig
+	config := gscp.MainConfig{
+		Config: gscp.Config{
+			LocalFileOutputFormatter: gscp.DefaultLocalFileOutputFormatter,
+		},
+	}
 	parser.MustAddArgument(
 		argparse.OptionStrings("--web-session-pool-limit"),
 		argparse.ActionFunc(argparse.Store),
@@ -102,6 +107,19 @@ field values.
 				"actual documents.",
 		),
 	).MustBind(&config.Config.IndexOnly)
+	parser.MustAddArgument(
+		argparse.OptionStrings("--local-file-output-format"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Type(func(v string) (interface{}, error) {
+			return curly.NewFormatter(v, ([]string)(nil))
+		}),
+		argparse.Help(
+			"When the source is a local index file whose "+
+				"filenames are gscp:// pseudo-URIs, "+
+				"use this format to name the local "+
+				"output filenames",
+		),
+	).MustBind(&config.Config.LocalFileOutputFormatter)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--overwrite"),
 		argparse.ActionFunc(argparse.StoreTrue),
