@@ -77,7 +77,7 @@ func makeArchs(as []Archive) archs {
 	for i, a := range as {
 		ars.elems[i].Archive = a
 	}
-	ars.lookup = lookupOf(ars.elems)
+	ars.lookup = lookupOfPtr(ars.elems, ptrToIDAndNamer)
 	return ars
 }
 

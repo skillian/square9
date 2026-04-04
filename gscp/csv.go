@@ -85,8 +85,14 @@ func (p *csvProcessor) initWorkers(ctx context.Context, limit int, config *Confi
 		defer logger.Verbose0("Results reader stopped.")
 		for result := range results {
 			if result.Err != nil {
-				errs = append(errs, result.Err)
-				cancel()
+				if config.MaxErrors == UnlimitedErrors {
+					logger.LogErr(result.Err)
+				} else {
+					errs = append(errs, result.Err)
+					if len(errs) > config.MaxErrors {
+						cancel()
+					}
+				}
 			}
 		}
 		p.workerErrors <- internal.MultiError(errs...)
@@ -117,7 +123,7 @@ func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error
 	if err := p.loadFieldNames(source); err != nil {
 		return fmt.Errorf("loading field names: %w", err)
 	}
-	if err := p.processTodoRows(ctx, dest); err != nil {
+	if err := p.processTodoRows(ctx, source, dest); err != nil {
 		return err
 	}
 	for {
@@ -128,7 +134,7 @@ func (p *csvProcessor) processCSV(ctx context.Context, source, dest *Spec) error
 		case err != nil:
 			return err
 		}
-		if err = p.processCSVRow(ctx, row, dest); err != nil {
+		if err = p.processCSVRow(ctx, row, source, dest); err != nil {
 			return err
 		}
 	}
@@ -146,7 +152,7 @@ func (p *csvProcessor) loadFieldNames(source *Spec) error {
 	return nil
 }
 
-func (p *csvProcessor) processTodoRows(ctx context.Context, dest *Spec) error {
+func (p *csvProcessor) processTodoRows(ctx context.Context, source, dest *Spec) error {
 	for {
 		todoRowIndex, ok := p.getNextTodoRowIndex()
 		if !ok {
@@ -160,7 +166,7 @@ func (p *csvProcessor) processTodoRows(ctx context.Context, dest *Spec) error {
 				todoRowIndex, err,
 			)
 		}
-		if err := p.processCSVRow(ctx, row, dest); err != nil {
+		if err := p.processCSVRow(ctx, row, source, dest); err != nil {
 			return err
 		}
 	}
@@ -206,11 +212,16 @@ func (p *csvProcessor) readNextCSVRow() ([]string, error) {
 	return row, nil
 }
 
-func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, dest *Spec) error {
+func (p *csvProcessor) processCSVRow(ctx context.Context, row []string, source, dest *Spec) error {
 	rowSource, err := parseSpecFromRow(row)
 	if err != nil {
 		return err
 	}
+	rowSource = rowSource.Copy(func(s *Spec) {
+		if source.Kind.HasAll(DeleteSpec) {
+			s.Kind |= DeleteSpec
+		}
+	})
 	rowDest := dest.Copy(func(s *Spec) {
 		for i, fieldName := range p.fieldNames {
 			if _, ok := s.Fields[fieldName]; !ok {

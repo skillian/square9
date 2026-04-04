@@ -158,7 +158,7 @@ func (s *Session) Databases(ctx context.Context, f IDAndNamerFilter) (ds []Datab
 		for i, d := range model.Databases {
 			s.dbs.elems[i] = db{Database: d}
 		}
-		s.dbs.lookup = lookupOf(s.dbs.elems)
+		s.dbs.lookup = lookupOfPtr(s.dbs.elems, ptrToIDAndNamer)
 	}
 	ds = ds[:0]
 	for _, i := range s.dbs.lookup.lookup(f, nil) {
@@ -283,7 +283,7 @@ func (s *Session) Fields(ctx context.Context, d *Database, a *Archive, f IDAndNa
 					"%v: %w", a, err,
 			)
 		}
-		ar.fields.lookup = lookupOf(ar.fields.elems)
+		ar.fields.lookup = lookupOfPtr(ar.fields.elems, ptrToIDAndNamer)
 		if logger.EffectiveLevel() <= logging.VerboseLevel {
 			logger.Verbose3(
 				"archive %s (ID: %d) fields: %v",
@@ -325,10 +325,10 @@ func (s *Session) Searches(ctx context.Context, d *Database, a *Archive, f IDAnd
 					"%v: %w", a, err,
 			)
 		}
-		ar.searches.lookup = lookupOf(ar.searches.elems)
+		ar.searches.lookup = lookupOfPtr(ar.searches.elems, ptrToIDAndNamer)
 		for i := range ar.searches.elems {
 			src := &ar.searches.elems[i]
-			src.lookup = lookupOf(src.Detail)
+			src.lookup = lookupOfPtr(src.Detail, ptrToIDAndNamer)
 		}
 		if logger.EffectiveLevel() <= logging.DebugLevel {
 			logger.Debug(
@@ -371,7 +371,7 @@ func (s *Session) executeSearch(ctx context.Context, d *Database, a *Archive, sr
 		nil,
 	}[:3]
 	if len(fs) > 0 {
-		crit, err := s.initSearchCriteria(ctx, ar, src, fs)
+		crit, err := s.initSearchCriteria(ar, src, fs)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to initialize search "+
@@ -634,7 +634,7 @@ func (s *Session) setImportDocumentFields(ctx context.Context, d *Database, a *A
 	return nil
 }
 
-func (s *Session) initSearchCriteria(ctx context.Context, ar *arch, src *search, fs []SearchCriterion) (criteria map[int64]string, err error) {
+func (s *Session) initSearchCriteria(ar *arch, src *search, fs []SearchCriterion) (criteria map[int64]string, err error) {
 	criteria = make(map[int64]string)
 	for _, f := range fs {
 		indexes := src.lookup.lookup(f.Prompt, nil)

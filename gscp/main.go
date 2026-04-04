@@ -19,22 +19,23 @@ type MainConfig struct {
 // Main is the main entry point for the program after the command line
 // is parsed.
 func Main(ctx context.Context, config MainConfig) error {
+	ctx, asker := ensureAskerInContext(ctx)
 	sourceInfo := specInfo{
 		str:      config.Source,
 		index:    config.FromIndex,
 		unsecure: config.Config.Unsecure,
+		delete:   config.Config.Delete,
 	}
-	destInfo := specInfo{
-		str:      config.Dest,
-		index:    config.ToIndex,
-		unsecure: config.Config.Unsecure,
-	}
-	ctx, asker := ensureAskerInContext(ctx)
 	source, err := parseSpecInfoAndEnsurePassword(
 		ctx, sourceInfo, "source", asker, &config.Config,
 	)
 	if err != nil {
 		return err
+	}
+	destInfo := specInfo{
+		str:      config.Dest,
+		index:    config.ToIndex,
+		unsecure: config.Config.Unsecure,
 	}
 	dest, err := parseSpecInfoAndEnsurePassword(
 		ctx, destInfo, "dest", asker, &config.Config,
@@ -55,6 +56,7 @@ type specInfo struct {
 	str      string
 	index    bool
 	unsecure bool
+	delete   bool
 }
 
 func parseSpecInfo(si specInfo) (*Spec, error) {
@@ -67,6 +69,9 @@ func parseSpecInfo(si specInfo) (*Spec, error) {
 	}
 	if si.unsecure {
 		sp.Kind |= UnsecureSpec
+	}
+	if si.delete {
+		sp.Kind |= DeleteSpec
 	}
 	if !sp.IsLocal() && sp.Kind.HasAll(IndexSpec) {
 		i := strings.LastIndexByte(sp.ArchivePath, '/')

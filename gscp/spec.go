@@ -82,6 +82,9 @@ const (
 	// UnsecureSpec allows connecting to the non-local spec
 	// with HTTP instead of HTTPS.
 	UnsecureSpec
+
+	// DeleteSpec is set when the specification should be deleted
+	DeleteSpec
 )
 
 const (
@@ -409,11 +412,15 @@ type Config struct {
 	// the pool to.
 	WebSessionPoolLimit int
 
+	// MaxErrors allows up to a number of errors while processing
+	// rows from an index file before aborting.
+	MaxErrors int
+
 	// IndexOnly will not export documents when the destination is
 	// an index file; it will only export the CSV.
 	IndexOnly bool
 
-	// AppendIndex is for searches inside of index files
+	// AppendIndex appends to an existing index file.
 	AppendIndex bool
 
 	// AllowOverwrite allows the destination to be overwritten
@@ -430,7 +437,17 @@ type Config struct {
 	// github.com/skillian/interactivity.ConsoleAsker fails to
 	// set into raw mode.
 	DisableTerminalRawMode bool
+
+	// AllowSearchesWithoutCriteria allows searches to be run
+	// without any criteria provided.  By default, an error is
+	// returned when a search is executed without criteria.
+	AllowSearchesWithoutCriteria bool
+
+	// Delete matching specs
+	Delete bool
 }
+
+const UnlimitedErrors = -1
 
 var DefaultLocalOutputFilenameFormatter = func() curly.Formatter {
 	fr, err := curly.NewFormatter("{0}", ([]string)(nil))
@@ -632,11 +649,21 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		}
 		crit := make([]web.SearchCriterion, 0, len(source.Fields))
 		logger.Verbose1("search prompt values: %#v", source.Fields)
+		hasNonBlank := false
 		for k, v := range source.Fields {
 			crit = append(crit, web.SearchCriterion{
 				Prompt: web.Name(k),
 				Value:  v,
 			})
+			if len(v) > 0 {
+				hasNonBlank = true
+			}
+		}
+		if !hasNonBlank && !config.AllowSearchesWithoutCriteria {
+			return fmt.Errorf(
+				"cannot retrieve %v without criteria",
+				source,
+			)
 		}
 		fieldCount := len(flds) + 1 // document ID
 		if !config.IndexOnly {
@@ -712,6 +739,15 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 					if err := storeDocument(ctx, doc, *outputFilename, config); err != nil {
 						return err
 					}
+				}
+				if source.Kind.HasAll(DeleteSpec) {
+					if err := s.DeleteDocument(ctx, dbar.db, dbar.arch, doc); err != nil {
+						return fmt.Errorf(
+							"Unable to delete document %s - %v: %w",
+							source, doc, err,
+						)
+					}
+					logger.Info2("Deleted document %s - %v", source, doc)
 				}
 				return csvWriter.Write(fieldVals)
 			},
@@ -1004,6 +1040,9 @@ func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar
 	if err := s.Search(ctx, dbar.db, dbar.arch, &srs[0], crit, &res); err != nil {
 		return err
 	}
+	if len(res.Docs) == 0 {
+		return nil
+	}
 	if len(res.Docs) > 1 {
 		return fmt.Errorf(
 			"found %d documents when attempting to "+
@@ -1011,11 +1050,11 @@ func deleteExistingDocuments(ctx context.Context, s *web.Session, sp *Spec, dbar
 			len(res.Docs), sp,
 		)
 	}
-	if len(res.Docs) == 1 {
-		logger.Info1("deleting existing document %v...", &res.Docs[0])
-		return s.DeleteDocument(ctx, dbar.db, dbar.arch, &res.Docs[0])
-	}
-	return nil
+	logger.Info1(
+		"deleting existing document %v...",
+		&res.Docs[0],
+	)
+	return s.DeleteDocument(ctx, dbar.db, dbar.arch, &res.Docs[0])
 }
 
 func WriteSpecTo(ctx context.Context, sp *Spec, w io.Writer, config *Config) error {

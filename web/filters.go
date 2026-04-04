@@ -2,7 +2,6 @@ package web
 
 import (
 	"fmt"
-	"reflect"
 )
 
 // IDAndNamer is implemented by most metadata objects in the Square 9 API.
@@ -65,25 +64,16 @@ type lookup struct {
 	byName map[Name]int
 }
 
-func lookupOf(slice interface{}) lookup {
-	rv := reflect.ValueOf(slice)
-	length := rv.Len()
+func ptrToIDAndNamer[T IDAndNamer](p T) IDAndNamer { return p }
+
+func lookupOfPtr[E any](slice []E, selector func(e *E) IDAndNamer) lookup {
 	lu := lookup{
-		byID:   make(map[ID]int, length),
-		byName: make(map[Name]int, length),
+		byID:   make(map[ID]int, len(slice)),
+		byName: make(map[Name]int, len(slice)),
 	}
-	selector := func(v reflect.Value) reflect.Value { return v }
-	for i := 0; i < length; i++ {
-		v := rv.Index(i)
-		ian, ok := selector(v).Interface().(IDAndNamer)
-		if !ok {
-			selector = func(v reflect.Value) reflect.Value {
-				return v.Addr()
-			}
-			ian = selector(v).Interface().(IDAndNamer)
-		}
-		lu.byID[ian.ID()] = i
-		lu.byName[ian.Name()] = i
+	for i := 0; i < len(slice); i++ {
+		lu.byID[selector(&slice[i]).ID()] = i
+		lu.byName[selector(&slice[i]).Name()] = i
 	}
 	return lu
 }

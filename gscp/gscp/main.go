@@ -61,6 +61,20 @@ field values.
 		},
 	}
 	parser.MustAddArgument(
+		argparse.OptionStrings("--append-index"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"Append to an existing index file",
+		),
+	).MustBind(&config.Config.AppendIndex)
+	parser.MustAddArgument(
+		argparse.OptionStrings("--delete"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"Delete the source documents",
+		),
+	).MustBind(&config.Config.Delete)
+	parser.MustAddArgument(
 		argparse.OptionStrings("--disable-raw-terminal"),
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
@@ -117,6 +131,19 @@ field values.
 				"given level",
 		),
 	).MustBind(&consoleLogLevel)
+	parser.MustAddArgument(
+		argparse.OptionStrings("--max-errors"),
+		argparse.MetaVar("COUNT"),
+		argparse.ActionFunc(argparse.Store),
+		argparse.Type(argparse.Int),
+		argparse.Help(
+			"Specify the maximum number of errors allowed "+
+				"when processing an index file before "+
+				"exiting.  Specify %d to allow "+
+				"unlimited errors",
+			gscp.UnlimitedErrors,
+		),
+	).MustBind(&config.Config.MaxErrors)
 	parser.MustAddArgument(
 		argparse.OptionStrings("--overwrite"),
 		argparse.ActionFunc(argparse.StoreTrue),
