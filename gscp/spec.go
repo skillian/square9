@@ -686,20 +686,25 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		if !config.IndexOnly {
 			fieldVals[len(fieldVals)-1] = "Filename"
 		}
-		if err := f.WithLock(func(f *os.File) error {
-			st, err := f.Stat()
-			if err != nil {
-				return fmt.Errorf(
-					"stating CSV file %s: %w",
-					f.Name(), err,
-				)
+		if err := f.WithLock(func(of *os.File) (flags LockedFileTellFlag, err error) {
+			if f.Size > 0 {
+				return LockedFileTellOmit, nil
 			}
-			if st.Size() == 0 {
-				if err := csvWriter.Write(fieldVals); err != nil {
-					return fmt.Errorf("writing CSV header row: %w", err)
-				}
+			// have to use a dedicated csvWriter
+			// here on this inner os.File because
+			// the outer LockedFile is locked.
+			csvWriter := csv.NewWriter(of)
+			if err := csvWriter.Write(fieldVals); err != nil {
+				return 0, fmt.Errorf("writing CSV header row: %w", err)
 			}
-			return nil
+			// have to flush the CSV writer
+			// so subsequent checks see that the
+			// file has been written to.
+			csvWriter.Flush()
+			if err := csvWriter.Error(); err != nil {
+				return 0, fmt.Errorf("flushing CSV header row: %w", err)
+			}
+			return 0, nil
 		}); err != nil {
 			return err
 		}

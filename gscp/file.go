@@ -2,6 +2,7 @@ package gscp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -55,9 +56,11 @@ type File interface {
 // LockedFile is a hack to deal with parallel websessions attempting
 // to open, write, and close the same index file.
 type LockedFile struct {
-	m  sync.Mutex
-	rc int
-	f  *os.File
+	m        sync.Mutex
+	Position int64
+	Size     int64
+	rc       int
+	f        *os.File
 }
 
 var lockedFiles = struct {
@@ -81,7 +84,7 @@ func existingLockedFileOf(filename string) *LockedFile {
 	return nil
 }
 
-func lockedFileOf(f *os.File) *LockedFile {
+func lockedFileOf(f *os.File) (*LockedFile, error) {
 	lockedFiles.mutex.Lock()
 	lf, ok := lockedFiles.files[f.Name()]
 	if ok {
@@ -96,20 +99,73 @@ func lockedFileOf(f *os.File) *LockedFile {
 					f.Name(), err,
 				)
 			}
-			return lf
+			return lf, nil
 		}
 		lf.m.Unlock()
 	}
 	lf = &LockedFile{f: f, rc: 1}
+	lf.m.Lock()
+	defer lf.m.Unlock()
 	lockedFiles.files[f.Name()] = lf
 	lockedFiles.mutex.Unlock()
-	return lf
+	fi, err := lf.f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"checking initial file size of %v: %w",
+			f.Name(), err,
+		)
+	}
+	lf.Size = fi.Size()
+	lf.Position, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"unable to determine current position of %v: %w",
+			f.Name(), err,
+		)
+	}
+	return lf, nil
 }
 
-func (f *LockedFile) WithLock(fn func(*os.File) error) error {
+type LockedFileTellFlag uint8
+
+const (
+	// LockedFileTellOmitSize indicates that the file size does
+	// not need to be re-queried after an operation on a LockedFile.
+	LockedFileTellOmitSize = 1 << iota
+
+	// LockedFileTellOmitPosition indicates that the file seek
+	// position does not need to be re-queried after an operation
+	// on a LockedFile.
+	LockedFileTellOmitPosition
+
+	// LockedFileTellOmit indicates that the LockedFile's cached
+	// file seek position and size do not need to be updated.
+	LockedFileTellOmit = LockedFileTellOmitSize | LockedFileTellOmitPosition
+)
+
+// WithLock locks the LockedFile and executes fn on the underlying
+// os.File.  If the function does not update the file seek position or
+// size, fn can return bypassTell = true to not update the LockedFile's
+// cached info.
+func (f *LockedFile) WithLock(fn func(*os.File) (tellFlags LockedFileTellFlag, err error)) error {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return fn(f.f)
+	tellFlags, err := fn(f.f)
+	if tellFlags&LockedFileTellOmitSize == 0 {
+		fi, err2 := f.f.Stat()
+		if err2 != nil {
+			return errors.Join(err, err2)
+		}
+		f.Size = fi.Size()
+	}
+	if tellFlags&LockedFileTellOmitPosition == 0 {
+		n, err2 := f.f.Seek(0, io.SeekCurrent)
+		if err2 != nil {
+			return errors.Join(err, err2)
+		}
+		f.Position = n
+	}
+	return err
 }
 
 func (f *LockedFile) Chdir() error {
@@ -134,7 +190,10 @@ func (f *LockedFile) Close() error {
 	if f.rc < 0 {
 		logger.Error("%v reference count = %d", f.f, f.rc)
 	} else if f.rc == 0 {
-		return f.f.Close()
+		err := f.f.Close()
+		if err == nil && f.Size == 0 {
+			err = os.Remove(f.f.Name())
+		}
 	}
 	return nil
 }
@@ -151,12 +210,15 @@ func (f *LockedFile) Name() string {
 func (f *LockedFile) Read(b []byte) (n int, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.Read(b)
+	n, err = f.f.Read(b)
+	f.Position += int64(n)
+	return
 }
 func (f *LockedFile) ReadAt(b []byte, off int64) (n int, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.ReadAt(b, off)
+	n, err = f.f.ReadAt(b, off)
+	return
 }
 func (f *LockedFile) ReadDir(n int) ([]os.DirEntry, error) {
 	f.m.Lock()
@@ -166,7 +228,10 @@ func (f *LockedFile) ReadDir(n int) ([]os.DirEntry, error) {
 func (f *LockedFile) ReadFrom(r io.Reader) (n int64, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.ReadFrom(r)
+	n, err = f.f.ReadFrom(r)
+	f.Position += n
+	f.Size = max(f.Size, f.Position)
+	return
 }
 func (f *LockedFile) Readdir(n int) ([]os.FileInfo, error) {
 	f.m.Lock()
@@ -181,7 +246,11 @@ func (f *LockedFile) Readdirnames(n int) (names []string, err error) {
 func (f *LockedFile) Seek(offset int64, whence int) (ret int64, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.Seek(offset, whence)
+	ret, err = f.f.Seek(offset, whence)
+	if err == nil {
+		f.Position = ret
+	}
+	return
 }
 func (f *LockedFile) SetDeadline(t time.Time) error {
 	f.m.Lock()
@@ -213,30 +282,45 @@ func (f *LockedFile) SyscallConn() (syscall.RawConn, error) {
 	defer f.m.Unlock()
 	return f.f.SyscallConn()
 }
-func (f *LockedFile) Truncate(size int64) error {
+func (f *LockedFile) Truncate(size int64) (err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.Truncate(size)
+	err = f.f.Truncate(size)
+	if err == nil {
+		f.Size = size
+		f.Position = min(f.Position, f.Size)
+	}
+	return
 }
 func (f *LockedFile) Write(b []byte) (n int, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.Write(b)
+	n, err = f.f.Write(b)
+	f.Position += int64(n)
+	f.Size = max(f.Size, f.Position)
+	return
 }
 func (f *LockedFile) WriteAt(b []byte, off int64) (n int, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.WriteAt(b, off)
+	n, err = f.f.WriteAt(b, off)
+	f.Size = max(f.Size, f.Position+int64(n))
+	return
 }
 func (f *LockedFile) WriteString(s string) (n int, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.WriteString(s)
+	n, err = f.f.WriteString(s)
+	f.Position += int64(n)
+	f.Size = max(f.Size, f.Position)
+	return
 }
 func (f *LockedFile) WriteTo(w io.Writer) (n int64, err error) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	return f.f.WriteTo(w)
+	n, err = f.f.WriteTo(w)
+	f.Position += n
+	return
 }
 
 // OpenLockedFileAppend opens or reuses an existing currently open
@@ -257,7 +341,7 @@ func OpenLockedFileAppend(filename string) (*LockedFile, error) {
 			filename, err,
 		)
 	}
-	return lockedFileOf(f), nil
+	return lockedFileOf(f)
 }
 
 // CreateLockedFile creates or reuses an existing, currently open
@@ -277,14 +361,23 @@ func CreateLockedFile(filename string, overwrite bool) (*LockedFile, error) {
 		f, err = os.Create(filename)
 	} else {
 		f, err = os.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+		if os.IsExist(err) {
+			// someone opened it before we did:
+			lf := existingLockedFileOf(filename)
+			if lf != nil {
+				return lf, nil
+			}
+			// but didn't open it as a locked file, or
+			// it's already closed
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to open output file %v for writing: %w",
+			"failed to create output file %v for writing: %w",
 			filename, err,
 		)
 	}
-	return lockedFileOf(f), nil
+	return lockedFileOf(f)
 }
 
 func createDirIfNotExist(path string) error {
