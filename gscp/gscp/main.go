@@ -61,6 +61,14 @@ field values.
 		},
 	}
 	parser.MustAddArgument(
+		argparse.OptionStrings("--allow-searches-without-criteria"),
+		argparse.ActionFunc(argparse.StoreTrue),
+		argparse.Help(
+			"Allow GlobalSearch searches to execute even if no "+
+				"criteria is provided.",
+		),
+	).MustBind(&config.Config.AllowSearchesWithoutCriteria)
+	parser.MustAddArgument(
 		argparse.OptionStrings("--append-index"),
 		argparse.ActionFunc(argparse.StoreTrue),
 		argparse.Help(
