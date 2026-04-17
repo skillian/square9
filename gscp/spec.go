@@ -29,6 +29,12 @@ const defaultAPIPath = "square9api/api"
 
 type SpecFields map[string]string
 
+// idPseudoSpecFieldName is a hack to store the exact document ID
+// into the spec so that after retrieving all of the results of a
+// search matching other criteria, the results can be filtered
+// locally to get only a specific document.
+const idPseudoSpecFieldName = ">>id"
+
 // Spec is a specification for a gscp source or destination.  Either
 // of which could be a local file or a gscp "pseudo-URI."
 type Spec struct {
@@ -651,6 +657,9 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		logger.Verbose1("search prompt values: %#v", source.Fields)
 		hasNonBlank := false
 		for k, v := range source.Fields {
+			if k == idPseudoSpecFieldName {
+				continue
+			}
 			crit = append(crit, web.SearchCriterion{
 				Prompt: web.Name(k),
 				Value:  v,
@@ -710,6 +719,9 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
 			func(ctx context.Context, doc *web.Document) (Err error) {
 				fieldVals[0] = strconv.FormatInt(doc.DocumentID, 10)
+				if v, ok := source.Fields[idPseudoSpecFieldName]; ok && v != fieldVals[0] {
+					return nil
+				}
 				for i, fld := range flds {
 					foundField := false
 					for _, docVal := range doc.Fields {
