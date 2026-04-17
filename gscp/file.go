@@ -353,8 +353,16 @@ func CreateLockedFile(filename string, overwrite bool) (*LockedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting absolute path to %s: %w", filename, err)
 	}
-	if lf := existingLockedFileOf(filename); lf != nil {
-		return lf, nil
+	if overwrite {
+		if lf := existingLockedFileOf(filename); lf != nil {
+			if err = lf.Truncate(0); err != nil {
+				return nil, fmt.Errorf(
+					"truncating locked file %v before overwrite: %w",
+					filename, err,
+				)
+			}
+			return lf, nil
+		}
 	}
 	var f *os.File
 	if overwrite {
