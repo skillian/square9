@@ -139,7 +139,7 @@ func (cf *cachedFile) Reset() error {
 	}
 	if cf.file.f != nil {
 		cf.r, cf.w = &cf.file, &cf.file
-		if _, err := cf.file.f.Seek(0, os.SEEK_SET); err != nil {
+		if _, err := cf.file.f.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf(
 				"failed to seek to beginning of "+
 					"cached file %v to truncate",

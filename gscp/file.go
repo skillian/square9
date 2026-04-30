@@ -344,10 +344,9 @@ func OpenLockedFileAppend(filename string) (*LockedFile, error) {
 	return lockedFileOf(f)
 }
 
-// CreateLockedFile creates or reuses an existing, currently open
-// LockedFile.  If the file isn't currently open, this will create
-// the file.  If the file already exists, this function will fail
-// unless overwrite is true.
+// CreateLockedFile creates a LockedFile.  If the file isn't currently
+// open, this will create the file.  If the file already exists, this
+// function will fail unless overwrite is true.
 func CreateLockedFile(filename string, overwrite bool) (*LockedFile, error) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {

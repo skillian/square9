@@ -21,6 +21,7 @@ import (
 	"github.com/skillian/logging"
 	"github.com/skillian/square9/internal"
 	"github.com/skillian/square9/web"
+	"github.com/skillian/workers"
 )
 
 var logger = logging.GetLogger("square9")
@@ -710,8 +711,12 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 		}
 		outputFilename := &fieldVals[len(fieldVals)-1]
 		storeDocument := func(
-			ctx context.Context, doc *web.Document,
-			outputFilename string, config *Config,
+			ctx context.Context,
+			s *web.Session,
+			config *Config,
+			dbar dbArch,
+			doc *web.Document,
+			outputFilename string,
 		) (Err error) {
 			f, err := CreateLockedFile(outputFilename, config.AllowOverwrite)
 			if err != nil {
@@ -720,6 +725,90 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 			defer internal.Catch(&Err, f.Close)
 			return s.Document(ctx, dbar.db, dbar.arch, doc, web.FileOption, f)
 		}
+		doneStoringDocuments := func() error { return nil }
+		if config.WebSessionPoolLimit > 1 {
+			storeDocumentImpl := storeDocument
+			type storeDocumentRequest struct {
+				webSession     *web.Session
+				config         *Config
+				dbar           dbArch
+				doc            *web.Document
+				outputFilename string
+			}
+			documents := make(chan *storeDocumentRequest, config.WebSessionPoolLimit*2)
+			storeDocumentResults := workers.Work(
+				ctx,
+				documents,
+				func(ctx context.Context, id workers.WorkerID, req *storeDocumentRequest) (struct{}, error) {
+					err := storeDocumentImpl(ctx, req.webSession, req.config, req.dbar, req.doc, req.outputFilename)
+					return struct{}{}, err
+				},
+				workers.WorkerCount(config.WebSessionPoolLimit),
+				workers.ResultChannelCapacity(config.WebSessionPoolLimit*2),
+			)
+			errs := struct {
+				mu   sync.Mutex
+				errs []error
+			}{}
+			doneGettingErrors := make(chan struct{})
+			go func() {
+				defer close(doneGettingErrors)
+				for res := range storeDocumentResults {
+					if res.Err != nil {
+						errs.mu.Lock()
+						errs.errs = append(errs.errs, res.Err)
+						errs.mu.Unlock()
+					}
+				}
+			}()
+			totalErrors := int(0)
+			getErrors := func() error {
+				errs.mu.Lock()
+				myErrs := errs.errs
+				errs.errs = nil
+				errs.mu.Unlock()
+				totalErrors += len(myErrs)
+				if config.MaxErrors != UnlimitedErrors && totalErrors >= config.MaxErrors {
+					close(documents)
+					switch len(myErrs) {
+					case 0:
+						//pass
+					case 1:
+						return myErrs[0]
+					default:
+						return errors.Join(myErrs...)
+					}
+					return nil
+				}
+				for _, err := range myErrs {
+					logger.LogErr(err)
+				}
+				return nil
+			}
+			storeDocument = func(
+				ctx context.Context,
+				s *web.Session,
+				config *Config,
+				dbar dbArch,
+				doc *web.Document,
+				outputFilename string,
+			) (Err error) {
+				documents <- &storeDocumentRequest{
+					s,
+					config,
+					dbar,
+					doc,
+					outputFilename,
+				}
+				return getErrors()
+			}
+			doneStoringDocuments = func() error {
+				close(documents)
+				<-doneGettingErrors
+				return getErrors()
+			}
+		}
+		defer internal.Catch(&Err, doneStoringDocuments)
 		return iterateSearchResultsPages(
 			ctx, s, dbar.db, dbar.arch, &srs[0], crit,
 			func(ctx context.Context, doc *web.Document) (Err error) {
@@ -753,7 +842,7 @@ func remoteSearchToLocalIndex(ctx context.Context, source, dest *Spec, config *C
 						exportDir,
 						*outputFilename+doc.FileType,
 					)
-					if err := storeDocument(ctx, doc, *outputFilename, config); err != nil {
+					if err := storeDocument(ctx, s, config, dbar, doc, *outputFilename); err != nil {
 						return err
 					}
 				}
