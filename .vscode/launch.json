@@ -51,15 +51,34 @@
 			"args": [
 				"--from-index",
 				"--to-index",
-				"--append-index",
 				"--allow-searches-without-criteria",
 				"--local-output-filename-format", "ROW_OC_Probate - {1} - {0}",
 				"--disable-raw-terminal",
 				"--max-errors", "-1",
 				"--web-session-pool-limit", "8",
 				"--log-console", "warn",
-				"gscp://rowapireadonlyprod@lancorow.mysquare9.com:ROW_PROD/ROW_OC_Probate/ROW_OC_Probate by FilingID less than?FilingID=1758411",
-				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate.csv"
+				"gscp://rowapireadonlyprod@lancorow.mysquare9.com:ROW_PROD/ROW_OC_Probate/ROW_OC_Probate by FilingID greater than?FilingID=1682538",
+				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_OC_Probate.pre-2026-04-30.csv"
+			],
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "LancoMlWithDocs",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/gscp/gscp",
+			"args": [
+				"--from-index",
+				"--to-index",
+				"--allow-searches-without-criteria",
+				"--local-output-filename-format", "ROW_Marriage_License - {1} - {2} - {0}",
+				"--disable-raw-terminal",
+				"--max-errors", "-1",
+				"--web-session-pool-limit", "8",
+				"--log-console", "warn",
+				"gscp://rowapireadonlyprod@lancorow.mysquare9.com:ROW_PROD/ROW Marriage License/Browse ROW Marriage License",
+				"\\\\square9qa.paperlessus.local\\e$\\square9\\LancoROW\\ROW_Marriage_License.pre-2026-04-30.csv"
 			],
 			"console": "integratedTerminal"
 		}
